@@ -63,6 +63,15 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         )  # Check periodically when offline
         self._availability_check_task: asyncio.Task | None = None
 
+        # Cache last known config data from device
+        self._last_config_data: dict[str, Any] = {}
+
+        # Pending config changes to push to device when it next wakes up
+        pending = entry.data.get("pending_config_changes", {})
+        self._pending_config_changes: dict[str, Any] = (
+            dict(pending) if isinstance(pending, dict) else {}
+        )
+
         # System info
         self.system_info: dict[str, Any] = {}
 
@@ -100,6 +109,15 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Fetching config data from %s", self.host)
             config_data = await self._fetch_config()
             _LOGGER.debug("Config data fetched: %s", bool(config_data))
+            if config_data:
+                self._last_config_data = config_data
+                # Device is online — push any pending config changes now
+                if self._pending_config_changes:
+                    _LOGGER.info(
+                        "Device online with %d pending config change(s), pushing",
+                        len(self._pending_config_changes),
+                    )
+                    self.hass.async_create_task(self.async_push_pending_config())
 
             # Self-healing: Check if device_id matches ConfigEntry
             # This fixes issues where device_id was missing or incorrect during initial setup
@@ -185,17 +203,22 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 _LOGGER.debug("Failed to fetch current image, keeping cached version")
 
             return {
-                "config": config_data,
+                "config": self._get_effective_config(),
                 "battery": battery_data,
                 "ota": ota_data,
                 "sensor": sensor_data,
             }
-        except (aiohttp.ClientError, UpdateFailed) as err:
+        except (
+            aiohttp.ClientError,
+            asyncio.TimeoutError,
+            OSError,
+            UpdateFailed,
+        ) as err:
             # Device is likely offline/asleep - use cached data instead of failing
             if self._last_battery_data or self._last_ota_data or self._last_sensor_data:
                 _LOGGER.debug("Device offline/asleep, using cached values: %s", err)
                 return {
-                    "config": {},
+                    "config": self._get_effective_config(),
                     "battery": self._last_battery_data,
                     "ota": self._last_ota_data,
                     "sensor": self._last_sensor_data,
@@ -207,7 +230,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 err,
             )
             return {
-                "config": {},
+                "config": self._get_effective_config(),
                 "battery": {},
                 "ota": {},
                 "sensor": {},
@@ -225,7 +248,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 if response.status != 200:
                     raise UpdateFailed(f"HTTP {response.status}")
                 return await response.json()
-        except aiohttp.ClientError as err:
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
             raise UpdateFailed(f"Failed to fetch config: {err}")
 
     async def _fetch_battery(self) -> dict[str, Any]:
@@ -343,22 +366,92 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Failed to fetch current image: %s", err)
             # Don't clear cache - preserve last known image for offline support
 
-    async def async_set_config(self, config: dict[str, Any]) -> bool:
-        """Set configuration on the photoframe (partial update using PATCH)."""
+    def _get_effective_config(self) -> dict[str, Any]:
+        """Return effective config: last known device config merged with pending changes."""
+        return {**self._last_config_data, **self._pending_config_changes}
+
+    def _save_pending_config(self) -> None:
+        """Persist pending config changes to config entry data."""
+        new_data = {
+            **self.entry.data,
+            "pending_config_changes": dict(self._pending_config_changes),
+        }
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+
+    def is_key_pending(self, key: str) -> bool:
+        """Return True if the given config key has an unpushed pending change."""
+        return key in self._pending_config_changes
+
+    @property
+    def has_config_data(self) -> bool:
+        """Return True if we have any knowledge of the device's config.
+
+        False means we've never successfully talked to the device in this
+        HA session and have no pending edits either — in that case config
+        controls should be disabled because we have no current value to show.
+        """
+        return bool(self._last_config_data or self._pending_config_changes)
+
+    async def async_push_pending_config(self) -> bool:
+        """Push all pending config changes to device via PATCH /api/config."""
+        if not self._pending_config_changes:
+            return True
+
+        config_to_push = dict(self._pending_config_changes)
+        _LOGGER.info(
+            "Pushing %d pending config change(s) to device", len(config_to_push)
+        )
         try:
             async with self.session.patch(
                 f"{self.host}{API_CONFIG}",
-                json=config,
+                json=config_to_push,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    _LOGGER.error("Failed to set config: HTTP %s", response.status)
+                    _LOGGER.warning(
+                        "Failed to push pending config: HTTP %s", response.status
+                    )
                     return False
-                await self.async_request_refresh()
+                # Merge pushed values into last-known config so effective config stays correct
+                self._last_config_data.update(config_to_push)
+                self._pending_config_changes.clear()
+                self._save_pending_config()
+                # Notify entities so they clear the pending indicator
+                self.async_update_listeners()
+                _LOGGER.info("Pending config changes pushed successfully")
+                # Re-fetch full config from device: the user may have edited
+                # settings from the device web UI while HA was offline, so we
+                # want those to show up in HA too.
+                self.hass.async_create_task(self.async_request_refresh())
                 return True
         except aiohttp.ClientError as err:
-            _LOGGER.error("Failed to set config: %s", err)
+            _LOGGER.debug("Failed to push pending config to device: %s", err)
             return False
+
+    async def async_set_config(self, config: dict[str, Any]) -> bool:
+        """Cache a config change and push to device if it is currently available.
+
+        Changes are always persisted so they are delivered on the next device
+        wake-up even if the device is currently in deep sleep.
+        """
+        # Optimistic update: reflect the change immediately in both caches
+        self._pending_config_changes.update(config)
+        self._last_config_data.update(config)
+
+        # Persist pending changes so they survive HA restarts
+        self._save_pending_config()
+
+        # Update coordinator data so all entities see the new values right away
+        if self.data is not None:
+            self.async_set_updated_data(
+                {**self.data, "config": self._get_effective_config()}
+            )
+
+        # Attempt an immediate push if device is currently reachable
+        if self.available:
+            await self.async_push_pending_config()
+
+        return True
 
     async def async_display_image(self, image_data: bytes) -> bool:
         """Send image to photoframe for display."""
@@ -428,3 +521,53 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         return self.system_info.get("sdcard_inserted", True) or self.system_info.get(
             "has_flash_storage", False
         )  # Default sdcard_inserted to True for backward compatibility
+
+
+class PendingConfigEntityMixin:
+    """Mixin for entities backed by a config key that may have pending changes.
+
+    Subclasses set `_config_key` (the key in the device config dict they manage)
+    and `_default_icon` (the normal icon). When that key has an unpushed pending
+    change, the entity's icon switches to a progress-clock icon and
+    `extra_state_attributes` exposes `pending_change: True`, giving users visual
+    feedback that the setting will be applied on next device wake-up.
+    """
+
+    _config_key: str | None = None
+    _default_icon: str | None = None
+
+    @property
+    def available(self) -> bool:
+        """Editable whenever we have any known config state.
+
+        Bypasses `CoordinatorEntity.available`'s `last_update_success` check
+        so a transient polling failure (e.g. device dozing off after an
+        auto-rotate cycle) doesn't lock the user out. But if we have never
+        successfully fetched config and have no pending edits either — for
+        example after an HA restart while the device is offline — we keep
+        the control disabled because there is no current value to edit.
+        """
+        coordinator: PhotoFrameCoordinator | None = getattr(self, "coordinator", None)
+        return coordinator is not None and coordinator.has_config_data
+
+    @property
+    def icon(self) -> str | None:
+        coordinator: PhotoFrameCoordinator | None = getattr(self, "coordinator", None)
+        if (
+            coordinator is not None
+            and self._config_key
+            and coordinator.is_key_pending(self._config_key)
+        ):
+            return "mdi:progress-clock"
+        return self._default_icon
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        coordinator: PhotoFrameCoordinator | None = getattr(self, "coordinator", None)
+        if (
+            coordinator is not None
+            and self._config_key
+            and coordinator.is_key_pending(self._config_key)
+        ):
+            return {"pending_change": True}
+        return None

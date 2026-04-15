@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PhotoFrameCoordinator
+from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
 
 
 async def async_setup_entry(
@@ -29,11 +29,15 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameRotationModeSelect(CoordinatorEntity, SelectEntity):
+class PhotoFrameRotationModeSelect(
+    PendingConfigEntityMixin, CoordinatorEntity, SelectEntity
+):
     """Rotation mode select for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:image-multiple"
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "rotation_mode"
+    _default_icon = "mdi:image-multiple"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the select."""
@@ -48,11 +52,6 @@ class PhotoFrameRotationModeSelect(CoordinatorEntity, SelectEntity):
         if not self.coordinator.has_storage:
             return ["url"]
         return ["storage", "url"]
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def current_option(self) -> str | None:
@@ -74,6 +73,7 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:camera"
+    _attr_available = True  # Always editable, even when device is offline
 
     def __init__(
         self,
@@ -88,11 +88,6 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
         self._attr_device_info = coordinator.device_info
         self._hass = hass
         self._entry = entry
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def options(self) -> list[str]:
@@ -134,12 +129,16 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
         self.async_write_ha_state()
 
 
-class PhotoFrameDisplayOrientationSelect(CoordinatorEntity, SelectEntity):
+class PhotoFrameDisplayOrientationSelect(
+    PendingConfigEntityMixin, CoordinatorEntity, SelectEntity
+):
     """Display orientation select for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:phone-rotate-landscape"
     _attr_options = ["landscape", "portrait"]
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "display_orientation"
+    _default_icon = "mdi:phone-rotate-landscape"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the select."""
@@ -147,11 +146,6 @@ class PhotoFrameDisplayOrientationSelect(CoordinatorEntity, SelectEntity):
         self._attr_unique_id = f"{entry.entry_id}_display_orientation"
         self._attr_name = "Display orientation"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def current_option(self) -> str | None:

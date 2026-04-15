@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PhotoFrameCoordinator
+from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
 
 
 async def async_setup_entry(
@@ -29,16 +29,20 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
+class PhotoFrameRotationIntervalNumber(
+    PendingConfigEntityMixin, CoordinatorEntity, NumberEntity
+):
     """Rotation interval number for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:timer-outline"
     _attr_native_min_value = 1
     _attr_native_max_value = 1440
     _attr_native_step = 1
     _attr_native_unit_of_measurement = UnitOfTime.MINUTES
     _attr_mode = NumberMode.BOX
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "rotate_interval"
+    _default_icon = "mdi:timer-outline"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the number."""
@@ -46,11 +50,6 @@ class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
         self._attr_unique_id = f"{entry.entry_id}_rotation_interval"
         self._attr_name = "Rotation interval"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> float | None:
@@ -65,15 +64,19 @@ class PhotoFrameRotationIntervalNumber(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_set_config({"rotate_interval": seconds})
 
 
-class PhotoFrameTimezoneOffsetNumber(CoordinatorEntity, NumberEntity):
+class PhotoFrameTimezoneOffsetNumber(
+    PendingConfigEntityMixin, CoordinatorEntity, NumberEntity
+):
     """Timezone offset number for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:map-clock"
     _attr_native_min_value = -12
     _attr_native_max_value = 14
     _attr_native_step = 0.5
     _attr_mode = NumberMode.BOX
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "timezone"
+    _default_icon = "mdi:map-clock"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the number."""
@@ -81,11 +84,6 @@ class PhotoFrameTimezoneOffsetNumber(CoordinatorEntity, NumberEntity):
         self._attr_unique_id = f"{entry.entry_id}_timezone_offset"
         self._attr_name = "Timezone offset"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> float | None:

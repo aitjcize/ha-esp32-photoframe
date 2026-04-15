@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PhotoFrameCoordinator
+from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
 
 
 async def async_setup_entry(
@@ -30,11 +30,15 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameSleepScheduleStartTime(CoordinatorEntity, TimeEntity):
+class PhotoFrameSleepScheduleStartTime(
+    PendingConfigEntityMixin, CoordinatorEntity, TimeEntity
+):
     """Sleep schedule start time for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:sleep"
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "sleep_schedule_start"
+    _default_icon = "mdi:sleep"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the time entity."""
@@ -42,11 +46,6 @@ class PhotoFrameSleepScheduleStartTime(CoordinatorEntity, TimeEntity):
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_start"
         self._attr_name = "Sleep schedule start"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> time | None:
@@ -63,11 +62,15 @@ class PhotoFrameSleepScheduleStartTime(CoordinatorEntity, TimeEntity):
         await self.coordinator.async_set_config({"sleep_schedule_start": minutes})
 
 
-class PhotoFrameSleepScheduleEndTime(CoordinatorEntity, TimeEntity):
+class PhotoFrameSleepScheduleEndTime(
+    PendingConfigEntityMixin, CoordinatorEntity, TimeEntity
+):
     """Sleep schedule end time for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:sleep-off"
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "sleep_schedule_end"
+    _default_icon = "mdi:sleep-off"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the time entity."""
@@ -75,11 +78,6 @@ class PhotoFrameSleepScheduleEndTime(CoordinatorEntity, TimeEntity):
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_end"
         self._attr_name = "Sleep schedule end"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> time | None:

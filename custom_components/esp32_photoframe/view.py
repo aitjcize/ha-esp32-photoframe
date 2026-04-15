@@ -224,15 +224,18 @@ class PhotoFrameNotifyView(HomeAssistantView):
                     device_name,
                 )
                 coordinator._device_online = True
+                # Push any pending config changes now that the device webserver is up
+                self.hass.async_create_task(coordinator.async_push_pending_config())
                 # Schedule refresh in background to avoid blocking HTTP response
                 self.hass.async_create_task(coordinator.async_request_refresh())
                 _LOGGER.info("Coordinator refresh scheduled")
             else:
-                # Device is online - just mark as available without refreshing
-                # Data will be fetched via periodic polling or update notification
+                # Device is online - push pending config and refresh to pick up
+                # any changes the user may have made via the device web UI
                 _LOGGER.info("Device %s is online", device_name)
                 coordinator._device_online = True
-                coordinator.async_set_updated_data(coordinator.data)
+                self.hass.async_create_task(coordinator.async_push_pending_config())
+                self.hass.async_create_task(coordinator.async_request_refresh())
 
             return web.Response(status=200, text="OK")
         except Exception as err:

@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PhotoFrameCoordinator
+from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
 
 
 async def async_setup_entry(
@@ -28,11 +28,13 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameImageUrlText(CoordinatorEntity, TextEntity):
+class PhotoFrameImageUrlText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):
     """Image URL text entity for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:link"
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "image_url"
+    _default_icon = "mdi:link"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the text entity."""
@@ -40,11 +42,6 @@ class PhotoFrameImageUrlText(CoordinatorEntity, TextEntity):
         self._attr_unique_id = f"{entry.entry_id}_image_url"
         self._attr_name = "Image URL"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> str | None:
@@ -57,11 +54,13 @@ class PhotoFrameImageUrlText(CoordinatorEntity, TextEntity):
         await self.coordinator.async_set_config({"image_url": value})
 
 
-class PhotoFrameHaUrlText(CoordinatorEntity, TextEntity):
+class PhotoFrameHaUrlText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):
     """Home Assistant URL text entity for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_icon = "mdi:home-assistant"
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "ha_url"
+    _default_icon = "mdi:home-assistant"
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the text entity."""
@@ -69,11 +68,6 @@ class PhotoFrameHaUrlText(CoordinatorEntity, TextEntity):
         self._attr_unique_id = f"{entry.entry_id}_ha_url"
         self._attr_name = "Home Assistant URL"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.available
 
     @property
     def native_value(self) -> str | None:
