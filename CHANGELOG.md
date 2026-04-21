@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.7.1
+
+### Changed
+- Removed the gear/options flow entirely. All three fields it used to expose were already first-class HA entities, which was the actual source of truth — having them in two places silently diverged when edited:
+  - `ha_url` → edit via the Home Assistant URL text entity (falls back to HA's configured internal/external URL via `get_url()` when empty)
+  - `use_ha_images` → edit via the Use HA Images switch entity
+  - `media_entity_id` → edit via the Media Entity select entity
+
 ## v2.6.8
 
 ### Added
