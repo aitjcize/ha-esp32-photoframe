@@ -26,23 +26,5 @@
     "abort": {
       "already_configured": "This PhotoFrame device is already configured"
     }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Configure ESP32 PhotoFrame",
-        "description": "Configure Home Assistant URL and image serving options.\n\n💡 Enable 'Use HA Images' to serve images from a camera/image entity when the device uses URL rotation mode.",
-        "data": {
-          "ha_url": "Home Assistant URL",
-          "use_ha_images": "Use HA Images for URL rotation",
-          "media_entity_id": "Media Entity (Camera/Image)"
-        },
-        "data_description": {
-          "ha_url": "The URL where Home Assistant can be accessed",
-          "use_ha_images": "When enabled, configures the PhotoFrame to fetch images from Home Assistant instead of an external URL",
-          "media_entity_id": "Select a camera or image entity to serve to the photoframe when 'Use HA Images' is enabled"
-        }
-      }
-    }
   }
 }

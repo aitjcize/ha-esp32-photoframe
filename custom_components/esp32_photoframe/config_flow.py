@@ -9,12 +9,12 @@ import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import get_url
 
-from .const import CONF_HA_URL, DOMAIN, IMAGE_ENDPOINT_PATH
+from .const import CONF_HA_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,99 +168,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {}
             ),  # Empty schema - no input fields, just submit button
             description_placeholders={"device_name": device_name},
-        )
-
-    @staticmethod
-    @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry,
-    ) -> config_entries.OptionsFlow:
-        """Create the options flow.
-
-        HA >= 2024.12 populates `self.config_entry` on the OptionsFlow
-        instance automatically; passing it to the constructor raises
-        `TypeError: OptionsFlowHandler() takes no arguments`.
-        """
-        return OptionsFlowHandler()
-
-
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow for the integration."""
-
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            # Update HA URL and optionally image URL on the photoframe
-            host = self.config_entry.data[CONF_HOST]
-            ha_url = user_input[CONF_HA_URL]
-            use_ha_images = user_input.get("use_ha_images", False)
-
-            session = async_get_clientsession(self.hass)
-
-            # Build config to send to photoframe
-            config_data = {"ha_url": ha_url}
-
-            # Only set image_url if user wants to use HA image serving
-            if use_ha_images:
-                image_url = f"{ha_url}{IMAGE_ENDPOINT_PATH}"
-                config_data["image_url"] = image_url
-                _LOGGER.info(
-                    "Configuring photoframe to fetch images from HA: %s", image_url
-                )
-
-            try:
-                async with session.post(
-                    f"{host}/api/config",
-                    json=config_data,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status != 200:
-                        _LOGGER.warning("Failed to update config on photoframe")
-            except Exception as err:
-                _LOGGER.warning("Failed to update config: %s", err)
-
-            return self.async_create_entry(title="", data=user_input)
-
-        # Get list of camera and image entities for selection
-        from homeassistant.helpers import entity_registry as er
-
-        entity_reg = er.async_get(self.hass)
-        camera_entities = [
-            entity.entity_id
-            for entity in entity_reg.entities.values()
-            if entity.domain in ("camera", "image")
-        ]
-
-        # Add state-based entities as well
-        for state in self.hass.states.async_all():
-            if (
-                state.domain in ("camera", "image")
-                and state.entity_id not in camera_entities
-            ):
-                camera_entities.append(state.entity_id)
-
-        camera_entities.sort()
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_HA_URL,
-                        default=self.config_entry.data.get(CONF_HA_URL, ""),
-                    ): str,
-                    vol.Optional(
-                        "use_ha_images",
-                        default=self.config_entry.options.get("use_ha_images", False),
-                    ): bool,
-                    vol.Optional(
-                        "media_entity_id",
-                        default=self.config_entry.options.get("media_entity_id", ""),
-                    ): vol.In([""] + camera_entities),
-                }
-            ),
         )
 
 
