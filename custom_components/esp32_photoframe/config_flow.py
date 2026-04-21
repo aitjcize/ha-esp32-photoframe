@@ -175,8 +175,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> config_entries.OptionsFlow:
-        """Create the options flow."""
-        return OptionsFlowHandler(config_entry)
+        """Create the options flow.
+
+        HA >= 2024.12 populates `self.config_entry` on the OptionsFlow
+        instance automatically; passing it to the constructor raises
+        `TypeError: OptionsFlowHandler() takes no arguments`.
+        """
+        return OptionsFlowHandler()
 
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
