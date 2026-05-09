@@ -1,0 +1,12 @@
+# isort and black disagree on a few rules by default — without this,
+# `make format` runs isort first (one ordering) and black second (a
+# different ordering) and they undo each other's changes, leaving
+# `make check` permanently red. Pinning isort to the black profile
+# makes them agree.
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.black]
+line-length = 100

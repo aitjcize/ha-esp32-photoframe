@@ -73,17 +73,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status != 200:
-                _LOGGER.warning(
-                    "Failed to set HA URL on photoframe: HTTP %s", response.status
-                )
+                _LOGGER.warning("Failed to set HA URL on photoframe: HTTP %s", response.status)
     except Exception as err:
         _LOGGER.warning("Failed to set HA URL on photoframe: %s", err)
 
     # Return info that you want to store in the config entry.
     return {
-        "title": (
-            f"PhotoFrame ({device_name})" if device_name else f"PhotoFrame ({host})"
-        ),
+        "title": (f"PhotoFrame ({device_name})" if device_name else f"PhotoFrame ({host})"),
         "host": host,
         "ha_url": ha_url,
         "device_name": device_name,
@@ -100,9 +96,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the config flow."""
         self._device_info: dict[str, Any] | None = None
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
 
@@ -140,9 +134,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Handle the confirmation step."""
         if user_input is not None:
             # User confirmed, create the entry
@@ -164,9 +156,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_name = self._device_info.get("device_name", "Unknown")
         return self.async_show_form(
             step_id="confirm",
-            data_schema=vol.Schema(
-                {}
-            ),  # Empty schema - no input fields, just submit button
+            data_schema=vol.Schema({}),  # Empty schema - no input fields, just submit button
             description_placeholders={"device_name": device_name},
         )
 

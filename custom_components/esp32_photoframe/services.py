@@ -21,9 +21,7 @@ SERVICE_DISPLAY_IMAGE_SCHEMA = vol.Schema(
 )
 
 
-async def async_register_services(
-    hass: HomeAssistant, coordinator: PhotoFrameCoordinator
-) -> None:
+async def async_register_services(hass: HomeAssistant, coordinator: PhotoFrameCoordinator) -> None:
     """Register services for the integration."""
 
     async def handle_rotate(call: ServiceCall) -> None:
@@ -37,9 +35,7 @@ async def async_register_services(
                     _LOGGER.info("Successfully triggered image rotation")
                     await coordinator.async_request_refresh()
                 else:
-                    _LOGGER.error(
-                        "Failed to trigger rotation: HTTP %s", response.status
-                    )
+                    _LOGGER.error("Failed to trigger rotation: HTTP %s", response.status)
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to trigger rotation: %s", err)
 

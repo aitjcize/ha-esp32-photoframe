@@ -36,9 +36,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameAutoRotateSwitch(
-    PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity
-):
+class PhotoFrameAutoRotateSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):
     """Auto-rotate switch for PhotoFrame."""
 
     _attr_has_entity_name = True
@@ -68,9 +66,7 @@ class PhotoFrameAutoRotateSwitch(
         await self.coordinator.async_set_config({"auto_rotate": False})
 
 
-class PhotoFrameDeepSleepSwitch(
-    PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity
-):
+class PhotoFrameDeepSleepSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):
     """Deep sleep switch for PhotoFrame."""
 
     _attr_has_entity_name = True
@@ -148,9 +144,7 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         _LOGGER.info("Disabled HA image serving - photoframe will use configured URL")
 
 
-class PhotoFrameSleepScheduleSwitch(
-    PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity
-):
+class PhotoFrameSleepScheduleSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):
     """Sleep schedule switch for PhotoFrame."""
 
     _attr_has_entity_name = True

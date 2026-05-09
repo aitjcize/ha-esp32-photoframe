@@ -88,9 +88,7 @@ class PhotoFrameRotateButton(CoordinatorEntity, ButtonEntity):
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to trigger rotation (ClientError): %s", err)
         except Exception as err:
-            _LOGGER.error(
-                "Failed to trigger rotation (unexpected error): %s", err, exc_info=True
-            )
+            _LOGGER.error("Failed to trigger rotation (unexpected error): %s", err, exc_info=True)
 
 
 class PhotoFrameRefreshButton(CoordinatorEntity, ButtonEntity):
@@ -159,9 +157,7 @@ class PhotoFrameOTAUpdateButton(CoordinatorEntity, ButtonEntity):
                     _LOGGER.info("OTA update started successfully")
                     await self.coordinator.async_request_refresh()
                 else:
-                    _LOGGER.error(
-                        "Failed to trigger OTA update: HTTP %s", response.status
-                    )
+                    _LOGGER.error("Failed to trigger OTA update: HTTP %s", response.status)
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to trigger OTA update: %s", err)
 
@@ -200,9 +196,7 @@ class PhotoFrameSleepButton(CoordinatorEntity, ButtonEntity):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 response_text = await response.text()
-                _LOGGER.debug(
-                    "Sleep response: HTTP %s, body: %s", response.status, response_text
-                )
+                _LOGGER.debug("Sleep response: HTTP %s, body: %s", response.status, response_text)
                 if response.status == 200:
                     _LOGGER.info("Device entering deep sleep")
                 else:
@@ -214,6 +208,4 @@ class PhotoFrameSleepButton(CoordinatorEntity, ButtonEntity):
         except aiohttp.ClientError as err:
             _LOGGER.error("Failed to trigger sleep (ClientError): %s", err)
         except Exception as err:
-            _LOGGER.error(
-                "Failed to trigger sleep (unexpected error): %s", err, exc_info=True
-            )
+            _LOGGER.error("Failed to trigger sleep (unexpected error): %s", err, exc_info=True)

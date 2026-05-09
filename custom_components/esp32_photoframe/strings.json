@@ -5,12 +5,12 @@
         "title": "Set up ESP32 PhotoFrame",
         "description": "Enter the connection details for your PhotoFrame device.\n\n💡 Tip: If the device appears offline and is battery-powered, press the BOOT button to wake it up.",
         "data": {
-          "host": "PhotoFrame IP or hostname (e.g., 192.168.1.100 or photoframe.local)",
-          "ha_url": "Home Assistant URL (e.g., http://homeassistant.local:8123)"
+          "host": "PhotoFrame IP or hostname",
+          "ha_url": "Home Assistant URL"
         },
         "data_description": {
           "host": "The IP address or hostname of your PhotoFrame device",
-          "ha_url": "The URL where Home Assistant can be accessed (used by PhotoFrame to fetch images)"
+          "ha_url": "The URL where Home Assistant can be accessed, used by the PhotoFrame to fetch images"
         }
       },
       "confirm": {

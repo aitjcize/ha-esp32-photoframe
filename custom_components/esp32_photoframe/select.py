@@ -29,9 +29,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameRotationModeSelect(
-    PendingConfigEntityMixin, CoordinatorEntity, SelectEntity
-):
+class PhotoFrameRotationModeSelect(PendingConfigEntityMixin, CoordinatorEntity, SelectEntity):
     """Rotation mode select for PhotoFrame."""
 
     _attr_has_entity_name = True
@@ -103,10 +101,7 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
 
         # Add state-based entities as well
         for state in self._hass.states.async_all():
-            if (
-                state.domain in ("camera", "image")
-                and state.entity_id not in camera_entities
-            ):
+            if state.domain in ("camera", "image") and state.entity_id not in camera_entities:
                 camera_entities.append(state.entity_id)
 
         camera_entities.sort()
@@ -129,9 +124,7 @@ class PhotoFrameMediaEntitySelect(CoordinatorEntity, SelectEntity):
         self.async_write_ha_state()
 
 
-class PhotoFrameDisplayOrientationSelect(
-    PendingConfigEntityMixin, CoordinatorEntity, SelectEntity
-):
+class PhotoFrameDisplayOrientationSelect(PendingConfigEntityMixin, CoordinatorEntity, SelectEntity):
     """Display orientation select for PhotoFrame."""
 
     _attr_has_entity_name = True

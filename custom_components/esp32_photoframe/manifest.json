@@ -3,6 +3,7 @@
   "name": "ESP32 PhotoFrame",
   "codeowners": ["@aitjcize"],
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/aitjcize/esp32-photoframe",
   "integration_type": "device",
   "iot_class": "local_polling",

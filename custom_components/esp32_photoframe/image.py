@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-import aiohttp
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant

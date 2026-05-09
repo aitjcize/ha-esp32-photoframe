@@ -30,9 +30,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameSleepScheduleStartTime(
-    PendingConfigEntityMixin, CoordinatorEntity, TimeEntity
-):
+class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEntity, TimeEntity):
     """Sleep schedule start time for PhotoFrame."""
 
     _attr_has_entity_name = True
@@ -62,9 +60,7 @@ class PhotoFrameSleepScheduleStartTime(
         await self.coordinator.async_set_config({"sleep_schedule_start": minutes})
 
 
-class PhotoFrameSleepScheduleEndTime(
-    PendingConfigEntityMixin, CoordinatorEntity, TimeEntity
-):
+class PhotoFrameSleepScheduleEndTime(PendingConfigEntityMixin, CoordinatorEntity, TimeEntity):
     """Sleep schedule end time for PhotoFrame."""
 
     _attr_has_entity_name = True

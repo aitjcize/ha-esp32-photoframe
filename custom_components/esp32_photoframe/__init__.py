@@ -71,9 +71,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def async_setup_services(
-    hass: HomeAssistant, coordinator: PhotoFrameCoordinator
-) -> None:
+async def async_setup_services(hass: HomeAssistant, coordinator: PhotoFrameCoordinator) -> None:
     """Set up services for the integration."""
     from .services import async_register_services
 

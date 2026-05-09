@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import socket
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
@@ -68,9 +67,7 @@ class PhotoFrameImageView(HomeAssistantView):
         # For now, we'll look for a configured entity in the integration options
 
         # Try to find the first photoframe integration
-        photoframe_entries = [
-            entry for entry in self.hass.config_entries.async_entries(DOMAIN)
-        ]
+        photoframe_entries = [entry for entry in self.hass.config_entries.async_entries(DOMAIN)]
 
         if not photoframe_entries:
             _LOGGER.error("No PhotoFrame integration configured")
@@ -110,9 +107,7 @@ class PhotoFrameImageView(HomeAssistantView):
                     },
                 )
             except Exception as err:
-                _LOGGER.error(
-                    "Error getting image from camera %s: %s", media_entity_id, err
-                )
+                _LOGGER.error("Error getting image from camera %s: %s", media_entity_id, err)
                 return web.Response(status=500, text=f"Error getting image: {err}")
 
         elif state.domain == "image":
@@ -142,9 +137,7 @@ class PhotoFrameImageView(HomeAssistantView):
 
                 async with session.get(full_url) as response:
                     if response.status != 200:
-                        return web.Response(
-                            status=response.status, text="Failed to fetch image"
-                        )
+                        return web.Response(status=response.status, text="Failed to fetch image")
 
                     image_data = await response.read()
                     content_type = response.headers.get("Content-Type", "image/jpeg")
@@ -159,9 +152,7 @@ class PhotoFrameImageView(HomeAssistantView):
                         },
                     )
             except Exception as err:
-                _LOGGER.error(
-                    "Error getting image from entity %s: %s", media_entity_id, err
-                )
+                _LOGGER.error("Error getting image from entity %s: %s", media_entity_id, err)
                 return web.Response(status=500, text=f"Error getting image: {err}")
 
         else:
@@ -247,9 +238,5 @@ async def async_setup_image_view(hass: HomeAssistant) -> None:
     """Set up the image serving view."""
     hass.http.register_view(PhotoFrameImageView(hass))
     hass.http.register_view(PhotoFrameNotifyView(hass))
-    _LOGGER.info(
-        "Registered PhotoFrame image serving endpoint at %s", IMAGE_ENDPOINT_PATH
-    )
-    _LOGGER.info(
-        "Registered PhotoFrame notify endpoint at /api/esp32_photoframe/notify"
-    )
+    _LOGGER.info("Registered PhotoFrame image serving endpoint at %s", IMAGE_ENDPOINT_PATH)
+    _LOGGER.info("Registered PhotoFrame notify endpoint at /api/esp32_photoframe/notify")

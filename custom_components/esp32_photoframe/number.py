@@ -29,9 +29,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameRotationIntervalNumber(
-    PendingConfigEntityMixin, CoordinatorEntity, NumberEntity
-):
+class PhotoFrameRotationIntervalNumber(PendingConfigEntityMixin, CoordinatorEntity, NumberEntity):
     """Rotation interval number for PhotoFrame."""
 
     _attr_has_entity_name = True
@@ -64,9 +62,7 @@ class PhotoFrameRotationIntervalNumber(
         await self.coordinator.async_set_config({"rotate_interval": seconds})
 
 
-class PhotoFrameTimezoneOffsetNumber(
-    PendingConfigEntityMixin, CoordinatorEntity, NumberEntity
-):
+class PhotoFrameTimezoneOffsetNumber(PendingConfigEntityMixin, CoordinatorEntity, NumberEntity):
     """Timezone offset number for PhotoFrame."""
 
     _attr_has_entity_name = True

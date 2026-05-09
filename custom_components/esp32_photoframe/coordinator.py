@@ -58,9 +58,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Track last update time for availability
         self._last_update_time: datetime | None = None
         self._availability_timeout = timedelta(minutes=2)  # Device offline after 2 min
-        self._availability_check_interval = timedelta(
-            minutes=1
-        )  # Check periodically when offline
+        self._availability_check_interval = timedelta(minutes=1)  # Check periodically when offline
         self._availability_check_task: asyncio.Task | None = None
 
         # Cache last known config data from device
@@ -134,9 +132,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     # Update the config entry with the correct device_id
                     new_data = {**self.entry.data}
                     new_data["device_id"] = remote_device_id
-                    self.hass.config_entries.async_update_entry(
-                        self.entry, data=new_data
-                    )
+                    self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
             # Try to fetch battery data
             _LOGGER.debug("Fetching battery data from %s", self.host)
@@ -161,9 +157,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
             # If we got OTA data, update our cache
             if ota_data:
-                _LOGGER.debug(
-                    "OTA data fetched successfully: %s", ota_data.get("current_version")
-                )
+                _LOGGER.debug("OTA data fetched successfully: %s", ota_data.get("current_version"))
                 self._last_ota_data = ota_data
             # Otherwise, use the last known OTA data
             else:
@@ -241,9 +235,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         try:
             async with self.session.get(
                 f"{self.host}{API_CONFIG}",
-                timeout=aiohttp.ClientTimeout(
-                    total=60
-                ),  # Long timeout for image processing
+                timeout=aiohttp.ClientTimeout(total=60),  # Long timeout for image processing
             ) as response:
                 if response.status != 200:
                     raise UpdateFailed(f"HTTP {response.status}")
@@ -256,9 +248,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         try:
             async with self.session.get(
                 f"{self.host}{API_BATTERY}",
-                timeout=aiohttp.ClientTimeout(
-                    total=60
-                ),  # Long timeout for image processing
+                timeout=aiohttp.ClientTimeout(total=60),  # Long timeout for image processing
             ) as response:
                 if response.status != 200:
                     _LOGGER.debug("Battery endpoint returned HTTP %s", response.status)
@@ -276,9 +266,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    _LOGGER.debug(
-                        "OTA status endpoint returned HTTP %s", response.status
-                    )
+                    _LOGGER.debug("OTA status endpoint returned HTTP %s", response.status)
                     return {}
                 data = await response.json()
                 # Extract the fields we need from the OTA status response
@@ -310,9 +298,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                         "available": True,
                     }
                 else:
-                    _LOGGER.debug(
-                        "Sensor not available or read error: %s", data.get("status")
-                    )
+                    _LOGGER.debug("Sensor not available or read error: %s", data.get("status"))
                     return {"available": False}
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch sensor data: %s", err)
@@ -326,9 +312,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    _LOGGER.debug(
-                        "System info endpoint returned HTTP %s", response.status
-                    )
+                    _LOGGER.debug("System info endpoint returned HTTP %s", response.status)
                     return {}
                 return await response.json()
         except aiohttp.ClientError as err:
@@ -358,9 +342,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("No image currently displayed on device")
                     # Don't clear cache - keep showing last known image
                 else:
-                    _LOGGER.debug(
-                        "Failed to fetch current image: HTTP %s", response.status
-                    )
+                    _LOGGER.debug("Failed to fetch current image: HTTP %s", response.status)
                     # Don't clear cache - keep showing last known image
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch current image: %s", err)
@@ -398,9 +380,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             return True
 
         config_to_push = dict(self._pending_config_changes)
-        _LOGGER.info(
-            "Pushing %d pending config change(s) to device", len(config_to_push)
-        )
+        _LOGGER.info("Pushing %d pending config change(s) to device", len(config_to_push))
         try:
             async with self.session.patch(
                 f"{self.host}{API_CONFIG}",
@@ -408,9 +388,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status != 200:
-                    _LOGGER.warning(
-                        "Failed to push pending config: HTTP %s", response.status
-                    )
+                    _LOGGER.warning("Failed to push pending config: HTTP %s", response.status)
                     return False
                 # Merge pushed values into last-known config so effective config stays correct
                 self._last_config_data.update(config_to_push)
@@ -443,9 +421,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Update coordinator data so all entities see the new values right away
         if self.data is not None:
-            self.async_set_updated_data(
-                {**self.data, "config": self._get_effective_config()}
-            )
+            self.async_set_updated_data({**self.data, "config": self._get_effective_config()})
 
         # Attempt an immediate push if device is currently reachable
         if self.available:
