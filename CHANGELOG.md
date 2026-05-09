@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.7.3
+
+### Added
+- Brand icon for the integration. Home Assistant 2026.3.0+ reads it directly from `custom_components/esp32_photoframe/brand/`, so the device list and config flow now show the photoframe icon instead of the generic placeholder. Same artwork as the firmware webapp and the HA add-on, so the whole ecosystem shares one brand mark.
+
 ## v2.7.1
 
 ### Changed
