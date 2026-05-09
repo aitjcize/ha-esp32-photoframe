@@ -1,0 +1,56 @@
+name: Release
+
+# Auto-create a GitHub Release whenever a vX.Y.Z tag is pushed. HACS reads
+# from GitHub Releases (not git tags), so without this users only see the
+# last manually-created Release.
+#
+# Release notes are extracted from CHANGELOG.md by matching the heading
+# `## v<version>` and copying everything up to the next `## v` heading.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version and changelog section
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          # Pull the matching `## v<version>` section out of CHANGELOG.md.
+          # awk stops at the next top-level version heading; the trailing
+          # tail/sed strips the heading line itself and any trailing blank.
+          NOTES=$(awk -v ver="${VERSION}" '
+            $0 ~ "^## " ver "( |$)" { found=1; next }
+            found && /^## v/         { exit }
+            found                    { print }
+          ' CHANGELOG.md)
+
+          if [ -z "${NOTES// }" ]; then
+            NOTES="Release ${VERSION}. See CHANGELOG.md for details."
+          fi
+
+          # Multiline output via heredoc.
+          {
+            echo "notes<<EOF_NOTES"
+            echo "${NOTES}"
+            echo "EOF_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.version }}
+          name: ${{ steps.changelog.outputs.version }}
+          body: ${{ steps.changelog.outputs.notes }}
+          draft: false
+          prerelease: false
