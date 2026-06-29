@@ -44,7 +44,7 @@ All settings are available as device controls - no need to dig into configuratio
 - **Rotation Mode** select - Switch between storage or URL rotation
 - **Auto Rotate** switch - Enable/disable automatic rotation
 - **Deep Sleep** switch - Enable/disable deep sleep for battery saving
-- **Rotation Interval** number - Set how often to rotate images
+- **Rotation Schedule** text - Set when images rotate, using cron rules
 
 ## Usage
 
@@ -57,13 +57,14 @@ The integration creates the following entities for easy control:
 - `switch.esp32_photoframe_use_ha_images` - Enable/disable Home Assistant image serving
 
 #### Numbers
-- `number.esp32_photoframe_rotation_interval` - Set rotation interval (60-86400 seconds)
+- `number.esp32_photoframe_timezone_offset` - Set the timezone UTC offset
 
 #### Selects
 - `select.esp32_photoframe_rotation_mode` - Choose between "storage" or "url" rotation
 - `select.esp32_photoframe_media_source` - Select which camera/image entity to serve
 
 #### Text Inputs
+- `text.esp32_photoframe_rotation_schedule` - Set the rotation schedule as cron rules (`minute hour day-of-week`; separate multiple rules with `;`, e.g. `0 9 1-5; 0 18 0,6`)
 - `text.esp32_photoframe_image_url` - Set the image URL for URL rotation mode
 - `text.esp32_photoframe_home_assistant_url` - Configure Home Assistant URL
 

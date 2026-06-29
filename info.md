@@ -20,7 +20,7 @@ This integration provides Home Assistant control and monitoring for e-ink photof
 - **Use HA images** - Toggle Home Assistant image serving
 - **Rotation mode** - Choose between SD card or URL rotation
 - **Media source** - Select which camera/image entity to display
-- **Rotate interval** - Set rotation interval in seconds
+- **Rotation schedule** - Set when images rotate, using cron rules
 - **Image URL** - Configure custom image URL
 
 ## Services
