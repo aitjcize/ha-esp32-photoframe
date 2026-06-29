@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Rotation schedule is now cron-based.** The firmware replaced the single
+  rotation interval with a list of simplified 3-field cron rules
+  (`minute hour day-of-week`). The **Rotation interval** number entity is
+  therefore replaced by a **Rotation schedule** text entity
+  (`text.esp32_photoframe_rotation_schedule`) that reads and writes
+  `rotate_cron`. Enter one or more rules separated by `;`, e.g. `0 */12 *` or
+  `0 9 1-5; 0 18 0,6`. The friendly schedule builder lives in the device web
+  UI, the mobile app, and the image server. The Sleep schedule switch and
+  start/end times are unchanged.
+
 ## v2.7.3
 
 ### Added
