@@ -11,6 +11,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -187,6 +188,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 system_info = await self._fetch_system_info()
                 if system_info:
                     self.system_info = system_info
+                    self._apply_board_identity(system_info)
 
             # Try to fetch current image (may fail if device is asleep)
             _LOGGER.debug("Fetching current image from %s", self.host)
@@ -318,6 +320,35 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch system info: %s", err)
             return {}
+
+    def _apply_board_identity(self, system_info: dict[str, Any]) -> None:
+        """Surface the real board as the HA device manufacturer/model.
+
+        device_info is created before system info is known, so it defaults to the
+        Waveshare PhotoPainter. Once the device reports its board_name (e.g.
+        seeedstudio_reterminal_e1003 for a grayscale GC16 panel), update the
+        registry so make/model are correct rather than always "Waveshare".
+        """
+        board = system_info.get("board_name") or ""
+        if not board:
+            return
+        if board.startswith("seeedstudio"):
+            manufacturer = "Seeed Studio"
+        elif board.startswith("waveshare"):
+            manufacturer = "Waveshare"
+        else:
+            manufacturer = "ESP32 PhotoFrame"
+        if (
+            self.device_info.get("manufacturer") == manufacturer
+            and self.device_info.get("model") == board
+        ):
+            return
+        self.device_info["manufacturer"] = manufacturer
+        self.device_info["model"] = board
+        registry = dr.async_get(self.hass)
+        device = registry.async_get_device(identifiers=self.device_info["identifiers"])
+        if device:
+            registry.async_update_device(device.id, manufacturer=manufacturer, model=board)
 
     async def fetch_current_image(self) -> None:
         """Fetch and cache the current image from the device."""

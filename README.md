@@ -2,7 +2,7 @@
 
 Home Assistant companion integration for the [ESP32 PhotoFrame](https://github.com/aitjcize/esp32-photoframe) firmware.
 
-This custom integration provides comprehensive control and monitoring for Waveshare's ESP32-S3-PhotoPainter e-ink display photoframes running the ESP32 PhotoFrame firmware.
+This custom integration provides comprehensive control and monitoring for e-ink photoframes running the ESP32 PhotoFrame firmware. It is panel-agnostic — it works with both **6-color (Spectra)** and **16-level grayscale (GC16)** boards (Waveshare PhotoPainter, Seeed Studio XIAO EE02/EE04, and reTerminal E1002/E1003/E1004), since image conversion is handled on-device.
 
 ## Features
 
