@@ -104,6 +104,46 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Called periodically and when device sends notification
         # Notifications provide immediate updates, polling provides regular battery/OTA checks
         try:
+            # Fetch battery first. The device is only awake for a brief window
+            # (~10s) after waking from deep sleep, so we grab the highest-value
+            # reading before anything slower. _fetch_battery never raises (it
+            # returns {} on failure), so unlike the config fetch below it can't
+            # short-circuit the rest of the update. This is the key fix for
+            # battery levels going stale: previously config was fetched first
+            # and, when it raised, battery was never attempted at all.
+            _LOGGER.debug("Fetching battery data from %s", self.host)
+            battery_data = await self._fetch_battery()
+
+            # If we got battery data, update our cache and timestamp
+            if battery_data:
+                _LOGGER.debug(
+                    "Battery data fetched successfully: %s%%",
+                    battery_data.get("battery_level"),
+                )
+                self._last_battery_data = battery_data
+                self._last_update_time = datetime.now()
+            # Otherwise, use the last known battery data
+            else:
+                _LOGGER.debug("Using cached battery data")
+                battery_data = self._last_battery_data
+
+            # Fetch sensor data next (also cheap and time-sensitive)
+            _LOGGER.debug("Fetching sensor data from %s", self.host)
+            sensor_data = await self._fetch_sensor()
+
+            # If we got sensor data, update our cache
+            if sensor_data:
+                _LOGGER.debug(
+                    "Sensor data fetched successfully: %.1f°C, %.1f%%",
+                    sensor_data.get("temperature", 0),
+                    sensor_data.get("humidity", 0),
+                )
+                self._last_sensor_data = sensor_data
+            # Otherwise, use the last known sensor data
+            else:
+                _LOGGER.debug("Using cached sensor data")
+                sensor_data = self._last_sensor_data
+
             # Try to fetch config data (may fail if device is asleep)
             _LOGGER.debug("Fetching config data from %s", self.host)
             config_data = await self._fetch_config()
@@ -135,23 +175,6 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     new_data["device_id"] = remote_device_id
                     self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
-            # Try to fetch battery data
-            _LOGGER.debug("Fetching battery data from %s", self.host)
-            battery_data = await self._fetch_battery()
-
-            # If we got battery data, update our cache and timestamp
-            if battery_data:
-                _LOGGER.debug(
-                    "Battery data fetched successfully: %s%%",
-                    battery_data.get("battery_level"),
-                )
-                self._last_battery_data = battery_data
-                self._last_update_time = datetime.now()
-            # Otherwise, use the last known battery data
-            else:
-                _LOGGER.debug("Using cached battery data")
-                battery_data = self._last_battery_data
-
             # Try to fetch OTA data
             _LOGGER.debug("Fetching OTA status from %s", self.host)
             ota_data = await self._fetch_ota_status()
@@ -164,23 +187,6 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             else:
                 _LOGGER.debug("Using cached OTA data")
                 ota_data = self._last_ota_data
-
-            # Try to fetch sensor data
-            _LOGGER.debug("Fetching sensor data from %s", self.host)
-            sensor_data = await self._fetch_sensor()
-
-            # If we got sensor data, update our cache
-            if sensor_data:
-                _LOGGER.debug(
-                    "Sensor data fetched successfully: %.1f°C, %.1f%%",
-                    sensor_data.get("temperature", 0),
-                    sensor_data.get("humidity", 0),
-                )
-                self._last_sensor_data = sensor_data
-            # Otherwise, use the last known sensor data
-            else:
-                _LOGGER.debug("Using cached sensor data")
-                sensor_data = self._last_sensor_data
 
             # Try to fetch system info if not already fetched
             if not self.system_info:
@@ -237,7 +243,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         try:
             async with self.session.get(
                 f"{self.host}{API_CONFIG}",
-                timeout=aiohttp.ClientTimeout(total=60),  # Long timeout for image processing
+                # Keep inside the device's ~10s post-wake window so a slow config
+                # fetch can't block the update; battery/sensor are fetched first.
+                timeout=aiohttp.ClientTimeout(total=15),
             ) as response:
                 if response.status != 200:
                     raise UpdateFailed(f"HTTP {response.status}")
@@ -250,7 +258,9 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         try:
             async with self.session.get(
                 f"{self.host}{API_BATTERY}",
-                timeout=aiohttp.ClientTimeout(total=60),  # Long timeout for image processing
+                # Short timeout: battery is fetched first inside the ~10s wake
+                # window and the endpoint responds quickly when the device is up.
+                timeout=aiohttp.ClientTimeout(total=15),
             ) as response:
                 if response.status != 200:
                     _LOGGER.debug("Battery endpoint returned HTTP %s", response.status)
