@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.8.0
 
 ### Changed
 - **Rotation schedule is now cron-based.** The firmware replaced the single
@@ -28,8 +28,6 @@
   wedges the pending-change queue: valid queued changes are still applied,
   the rejected value is discarded, and the device's error message is shown in
   the UI instead of the bad value appearing accepted.
-- Rotation schedule input is validated locally (rule count, length, 3-field
-  shape) before being queued for the device.
 
 ## v2.7.3
 
