@@ -1,10 +1,16 @@
-.PHONY: lint format check clean test test-mock-server setup-venv
+.PHONY: lint format check clean test test-mock-server setup-venv install-hooks
 
 # Python files
 PYTHON_FILES := $(shell find custom_components -name "*.py")
 
 # Default target
 all: lint
+
+# Enable the repo's git hooks (pre-commit runs `make check`).
+install-hooks:
+	@git config core.hooksPath .githooks
+	@echo "Git hooks enabled (core.hooksPath = .githooks)."
+	@echo "Commits now run 'make check' first."
 
 # Note: If you're using a virtual environment, activate it before running these commands
 # Example: source venv/bin/activate
