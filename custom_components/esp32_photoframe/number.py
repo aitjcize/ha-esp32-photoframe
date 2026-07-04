@@ -5,6 +5,7 @@ from __future__ import annotations
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -19,6 +20,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up the number platform."""
     coordinator: PhotoFrameCoordinator = hass.data[DOMAIN][entry.entry_id]
+
+    # The rotation-interval number was replaced by the rotation-schedule text
+    # entity; drop the stale registry entry so upgrades don't leave a
+    # permanently-unavailable orphan behind.
+    ent_reg = er.async_get(hass)
+    stale = ent_reg.async_get_entity_id("number", DOMAIN, f"{entry.entry_id}_rotation_interval")
+    if stale:
+        ent_reg.async_remove(stale)
 
     entities = [
         PhotoFrameTimezoneOffsetNumber(coordinator, entry),

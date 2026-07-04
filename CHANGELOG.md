@@ -12,6 +12,19 @@
   `0 9 1-5; 0 18 0,6`. The friendly schedule builder lives in the device web
   UI, the mobile app, and the image server. The Sleep schedule switch and
   start/end times are unchanged.
+  - **Breaking:** automations referencing
+    `number.esp32_photoframe_rotation_interval` must be updated to the new
+    text entity; the old registry entry is removed automatically on upgrade.
+  - The schedule entity requires firmware with cron support (it shows as
+    unavailable on older firmware, which doesn't understand `rotate_cron`).
+
+### Fixed
+- A config value rejected by the device (e.g. an invalid cron rule) no longer
+  wedges the pending-change queue: valid queued changes are still applied,
+  the rejected value is discarded, and the device's error message is shown in
+  the UI instead of the bad value appearing accepted.
+- Rotation schedule input is validated locally (rule count, length, 3-field
+  shape) before being queued for the device.
 
 ## v2.7.3
 
