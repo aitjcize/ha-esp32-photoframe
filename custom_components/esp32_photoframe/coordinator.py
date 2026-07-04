@@ -11,6 +11,7 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -70,6 +71,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self._pending_config_changes: dict[str, Any] = (
             dict(pending) if isinstance(pending, dict) else {}
         )
+
+        # Device message from the most recent semantic (HTTP 400) rejection,
+        # consumed by async_set_config to surface the error to the user
+        self._last_rejection: str | None = None
 
         # System info
         self.system_info: dict[str, Any] = {}
@@ -415,6 +420,62 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         """
         return bool(self._last_config_data or self._pending_config_changes)
 
+    @staticmethod
+    async def _response_message(response: aiohttp.ClientResponse) -> str:
+        """Extract the device's error message from a config response, if any."""
+        try:
+            body = await response.json(content_type=None)
+            if isinstance(body, dict) and isinstance(body.get("message"), str):
+                return body["message"]
+        except (aiohttp.ClientError, ValueError):
+            pass
+        return ""
+
+    async def _push_config_keys_individually(self, config: dict[str, Any]) -> None:
+        """Retry a rejected batch one key at a time, discarding rejected keys.
+
+        The device validates config semantically and rejects the whole PATCH
+        on the first invalid value, so a single bad entry (e.g. a typoed cron
+        rule) would otherwise wedge every other queued change in the pending
+        queue forever. Keys the device accepts are applied and cleared; keys
+        it rejects with HTTP 400 are dropped with an error so the queue heals.
+        """
+        for key, value in config.items():
+            if key not in self._pending_config_changes:
+                continue
+            try:
+                async with self.session.patch(
+                    f"{self.host}{API_CONFIG}",
+                    json={key: value},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as response:
+                    if response.status == 200:
+                        self._last_config_data[key] = value
+                        self._pending_config_changes.pop(key, None)
+                    elif response.status == 400:
+                        msg = await self._response_message(response)
+                        self._last_rejection = msg or f"invalid value for {key}"
+                        self._pending_config_changes.pop(key, None)
+                        _LOGGER.error(
+                            "Device rejected config %r (%s); discarding the change",
+                            key,
+                            self._last_rejection,
+                        )
+                    else:
+                        _LOGGER.warning(
+                            "Failed to push config %r: HTTP %s; will retry later",
+                            key,
+                            response.status,
+                        )
+            except aiohttp.ClientError as err:
+                _LOGGER.debug("Device went away during per-key config push: %s", err)
+                break
+        self._save_pending_config()
+        self.async_update_listeners()
+        # Re-fetch so any optimistic value from a rejected key is replaced by
+        # the device's actual config.
+        self.hass.async_create_task(self.async_request_refresh())
+
     async def async_push_pending_config(self) -> bool:
         """Push all pending config changes to device via PATCH /api/config."""
         if not self._pending_config_changes:
@@ -428,6 +489,17 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 json=config_to_push,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
+                if response.status == 400:
+                    # Semantic rejection, not an offline device: some value in
+                    # the batch is invalid. Retry per key so the valid changes
+                    # still apply and only the bad one is dropped.
+                    msg = await self._response_message(response)
+                    _LOGGER.warning(
+                        "Device rejected pending config (%s); retrying keys individually",
+                        msg or "no message",
+                    )
+                    await self._push_config_keys_individually(config_to_push)
+                    return False
                 if response.status != 200:
                     _LOGGER.warning("Failed to push pending config: HTTP %s", response.status)
                     return False
@@ -466,7 +538,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Attempt an immediate push if device is currently reachable
         if self.available:
+            self._last_rejection = None
             await self.async_push_pending_config()
+            if self._last_rejection:
+                msg = self._last_rejection
+                self._last_rejection = None
+                raise HomeAssistantError(f"PhotoFrame rejected the change: {msg}")
 
         return True
 
