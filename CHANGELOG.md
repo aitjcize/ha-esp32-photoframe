@@ -10,13 +10,18 @@
   (`text.esp32_photoframe_rotation_schedule`) that reads and writes
   `rotate_cron`. Enter one or more rules separated by `;`, e.g. `0 */12 *` or
   `0 9 1-5; 0 18 0,6`. The friendly schedule builder lives in the device web
-  UI, the mobile app, and the image server. The Sleep schedule switch and
-  start/end times are unchanged.
+  UI, the mobile app, and the image server.
   - **Breaking:** automations referencing
     `number.esp32_photoframe_rotation_interval` must be updated to the new
     text entity; the old registry entry is removed automatically on upgrade.
   - The schedule entity requires firmware with cron support (it shows as
     unavailable on older firmware, which doesn't understand `rotate_cron`).
+- **The Sleep schedule (quiet hours) is now a legacy feature.** Cron firmware
+  bounds the active hours in the schedule rules (e.g. `0 7-23/2 *`, or two
+  rules for overnight coverage) instead of a separate quiet-hours window, so
+  the **Sleep schedule** switch and the **Sleep schedule start/end** time
+  entities now show as **unavailable** on cron firmware. They remain usable on
+  older (pre-cron) firmware.
 
 ### Fixed
 - A config value rejected by the device (e.g. an invalid cron rule) no longer

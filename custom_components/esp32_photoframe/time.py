@@ -34,7 +34,6 @@ class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEnti
     """Sleep schedule start time for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_available = True  # Always editable, even when device is offline
     _config_key = "sleep_schedule_start"
     _default_icon = "mdi:sleep"
 
@@ -44,6 +43,16 @@ class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEnti
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_start"
         self._attr_name = "Sleep schedule start"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Unavailable on cron firmware, which dropped the sleep schedule."""
+        if not super().available:
+            return False
+        config = self.coordinator.data.get("config", {})
+        return "sleep_schedule_enabled" in config or self.coordinator.is_key_pending(
+            self._config_key
+        )
 
     @property
     def native_value(self) -> time | None:
@@ -64,7 +73,6 @@ class PhotoFrameSleepScheduleEndTime(PendingConfigEntityMixin, CoordinatorEntity
     """Sleep schedule end time for PhotoFrame."""
 
     _attr_has_entity_name = True
-    _attr_available = True  # Always editable, even when device is offline
     _config_key = "sleep_schedule_end"
     _default_icon = "mdi:sleep-off"
 
@@ -74,6 +82,16 @@ class PhotoFrameSleepScheduleEndTime(PendingConfigEntityMixin, CoordinatorEntity
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_end"
         self._attr_name = "Sleep schedule end"
         self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Unavailable on cron firmware, which dropped the sleep schedule."""
+        if not super().available:
+            return False
+        config = self.coordinator.data.get("config", {})
+        return "sleep_schedule_enabled" in config or self.coordinator.is_key_pending(
+            self._config_key
+        )
 
     @property
     def native_value(self) -> time | None:
