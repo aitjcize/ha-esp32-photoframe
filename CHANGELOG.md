@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v2.9.0
 
 ### Added
 - **Rotation gate** — a new **Auto rotate enabled sensor** select lets you skip
