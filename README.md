@@ -43,6 +43,7 @@ All settings are available as device controls - no need to dig into configuratio
 - **Media Source** select - Choose which camera/image entity to display
 - **Rotation Mode** select - Switch between storage or URL rotation
 - **Auto Rotate** switch - Enable/disable automatic rotation
+- **Auto Rotate Enabled Sensor** select - Only rotate while a chosen binary sensor is on
 - **Deep Sleep** switch - Enable/disable deep sleep for battery saving
 - **Rotation Schedule** text - Set when images rotate, using cron rules
 
@@ -62,6 +63,7 @@ The integration creates the following entities for easy control:
 #### Selects
 - `select.esp32_photoframe_rotation_mode` - Choose between "storage" or "url" rotation
 - `select.esp32_photoframe_media_source` - Select which camera/image entity to serve
+- `select.esp32_photoframe_auto_rotate_enabled_sensor` - Gate rotation on a `binary_sensor`: the frame only rotates while it is `on` ("None" = always). For complex conditions, point it at a Template binary-sensor helper.
 
 #### Text Inputs
 - `text.esp32_photoframe_rotation_schedule` - Set the rotation schedule as cron rules (`minute hour day-of-week`; separate multiple rules with `;`, e.g. `0 9 1-5; 0 18 0,6`)

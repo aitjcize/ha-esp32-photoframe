@@ -24,6 +24,7 @@ async def async_setup_entry(
         PhotoFrameRotationModeSelect(coordinator, entry),
         PhotoFrameMediaEntitySelect(coordinator, entry, hass),
         PhotoFrameDisplayOrientationSelect(coordinator, entry),
+        PhotoFrameRotateEnabledSensorSelect(coordinator, entry, hass),
     ]
 
     async_add_entities(entities)
@@ -149,3 +150,60 @@ class PhotoFrameDisplayOrientationSelect(PendingConfigEntityMixin, CoordinatorEn
     async def async_select_option(self, option: str) -> None:
         """Set the display orientation."""
         await self.coordinator.async_set_config({"display_orientation": option})
+
+
+class PhotoFrameRotateEnabledSensorSelect(CoordinatorEntity, SelectEntity):
+    """Binary sensor that gates auto-rotation on each wake.
+
+    When the frame checks in on wake, HA reports the selected sensor's state;
+    if it is off the device skips the rotation (and the e-paper refresh) and
+    goes back to sleep until the next scheduled wake — e.g. only rotate when
+    someone is home. Pick "None" to always rotate. For richer conditions,
+    create a Template binary-sensor helper and select it here. This is HA-side
+    logic, stored in the config entry options and never sent to the device.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:motion-sensor"
+    _attr_available = True  # Always editable, even when device is offline
+
+    def __init__(
+        self,
+        coordinator: PhotoFrameCoordinator,
+        entry: ConfigEntry,
+        hass: HomeAssistant,
+    ) -> None:
+        """Initialize the select."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_rotate_enabled_sensor"
+        self._attr_name = "Auto rotate enabled sensor"
+        self._attr_device_info = coordinator.device_info
+        self._hass = hass
+        self._entry = entry
+
+    @property
+    def options(self) -> list[str]:
+        """Return available binary_sensor entities."""
+        from homeassistant.helpers import entity_registry as er
+
+        entity_reg = er.async_get(self._hass)
+        sensors = {
+            entity.entity_id
+            for entity in entity_reg.entities.values()
+            if entity.domain == "binary_sensor"
+        }
+        for state in self._hass.states.async_all("binary_sensor"):
+            sensors.add(state.entity_id)
+        return ["None"] + sorted(sensors)
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the currently selected gating sensor."""
+        return self._entry.options.get("rotate_sensor") or "None"
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the gating sensor."""
+        new_options = dict(self._entry.options)
+        new_options["rotate_sensor"] = option if option != "None" else ""
+        self._hass.config_entries.async_update_entry(self._entry, options=new_options)
+        self.async_write_ha_state()

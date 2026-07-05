@@ -6,12 +6,34 @@ import logging
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, IMAGE_ENDPOINT_PATH
 from .coordinator import PhotoFrameCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def should_rotate(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Return whether the frame should rotate on this wake.
+
+    Gated by the configured binary_sensor ("Auto rotate enabled sensor"): the
+    frame rotates only while that sensor is on. No sensor configured, or a
+    sensor that is missing/unavailable/unknown, defaults to rotating so a
+    misconfiguration never freezes the frame — the device itself fail-closes
+    only when it can't reach HA at all. For richer conditions, users point
+    this at a Template binary-sensor helper.
+    """
+    entity_id = (entry.options.get("rotate_sensor") or "").strip()
+    if not entity_id:
+        return True
+    state = hass.states.get(entity_id)
+    if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        _LOGGER.warning("Rotation-gate sensor %s unavailable; allowing rotation", entity_id)
+        return True
+    return state.state == "on"
 
 
 def find_coordinator_by_device_id(
@@ -228,7 +250,10 @@ class PhotoFrameNotifyView(HomeAssistantView):
                 self.hass.async_create_task(coordinator.async_push_pending_config())
                 self.hass.async_create_task(coordinator.async_request_refresh())
 
-            return web.Response(status=200, text="OK")
+            # Answer the device's rotation-gate question (piggybacked on the
+            # online notification): { "rotate": true|false }.
+            rotate = should_rotate(self.hass, coordinator.entry)
+            return web.json_response({"rotate": rotate})
         except Exception as err:
             _LOGGER.error("Error processing notification: %s", err)
             return web.Response(status=400, text=f"Error: {err}")

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Rotation gate** — a new **Auto rotate enabled sensor** select lets you skip
+  image rotations based on a binary sensor. When the frame wakes it checks in
+  with HA; if the chosen sensor is off, the device goes back to sleep without
+  refreshing (and without the e-paper flash), saving battery — e.g. only rotate
+  when someone is home. Pick "None" to always rotate. For richer conditions
+  (presence *and* daytime, etc.), create a Template binary-sensor helper
+  (Settings → Devices & Services → Helpers) and select it here. The cron wake
+  schedule is unchanged; this only decides whether each wake actually rotates.
+  Requires firmware with rotation-gate support.
+
 ## v2.8.0
 
 ### Changed
