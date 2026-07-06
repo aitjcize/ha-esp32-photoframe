@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.9.1
+
+### Changed
+
+- Read the device's `device_id` from `/api/system-info` (the canonical identity
+  endpoint) instead of `/api/config`. No user-facing change — this lets upcoming
+  firmware drop the duplicate `device_id` from `/api/config`. Update this
+  integration before flashing that firmware.
+
 ## v2.9.0
 
 ### Added
