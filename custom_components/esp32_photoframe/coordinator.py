@@ -163,23 +163,6 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     )
                     self.hass.async_create_task(self.async_push_pending_config())
 
-            # Self-healing: Check if device_id matches ConfigEntry
-            # This fixes issues where device_id was missing or incorrect during initial setup
-            if config_data and "device_id" in config_data:
-                remote_device_id = config_data["device_id"]
-                current_device_id = self.entry.data.get("device_id")
-
-                if remote_device_id and remote_device_id != current_device_id:
-                    _LOGGER.info(
-                        "Updating ConfigEntry device_id from '%s' to '%s'",
-                        current_device_id,
-                        remote_device_id,
-                    )
-                    # Update the config entry with the correct device_id
-                    new_data = {**self.entry.data}
-                    new_data["device_id"] = remote_device_id
-                    self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-
             # Try to fetch OTA data
             _LOGGER.debug("Fetching OTA status from %s", self.host)
             ota_data = await self._fetch_ota_status()
@@ -200,6 +183,20 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 if system_info:
                     self.system_info = system_info
                     self._apply_board_identity(system_info)
+
+            # Self-healing: keep the ConfigEntry's device_id in sync with the id
+            # the device reports (fixes a missing/incorrect id from initial
+            # setup). Sourced from system-info, the canonical identity endpoint.
+            remote_device_id = (self.system_info or {}).get("device_id")
+            if remote_device_id and remote_device_id != self.entry.data.get("device_id"):
+                _LOGGER.info(
+                    "Updating ConfigEntry device_id from '%s' to '%s'",
+                    self.entry.data.get("device_id"),
+                    remote_device_id,
+                )
+                new_data = {**self.entry.data}
+                new_data["device_id"] = remote_device_id
+                self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
             # Try to fetch current image (may fail if device is asleep)
             _LOGGER.debug("Fetching current image from %s", self.host)

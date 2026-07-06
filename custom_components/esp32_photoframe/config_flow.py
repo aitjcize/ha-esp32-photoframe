@@ -14,7 +14,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import get_url
 
-from .const import CONF_HA_URL, DOMAIN
+from .const import API_SYSTEM_INFO, CONF_HA_URL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,18 +38,19 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     if not host.startswith(("http://", "https://")):
         host = f"http://{host}"
 
-    # Test connection to photoframe and fetch device name
+    # Test connection to photoframe and fetch device name + id. Both come from
+    # /api/system-info (the canonical source for device identity).
     session = async_get_clientsession(hass)
     device_name = None
     try:
         async with session.get(
-            f"{host}/api/config", timeout=aiohttp.ClientTimeout(total=10)
+            f"{host}{API_SYSTEM_INFO}", timeout=aiohttp.ClientTimeout(total=10)
         ) as response:
             if response.status != 200:
                 raise CannotConnect(f"HTTP {response.status}")
-            config_data = await response.json()
-            device_name = config_data.get("device_name", "ESP32-PhotoFrame")
-            device_id = config_data.get("device_id")
+            system_info = await response.json()
+            device_name = system_info.get("device_name", "ESP32-PhotoFrame")
+            device_id = system_info.get("device_id")
     except aiohttp.ClientError as err:
         raise CannotConnect(f"Connection failed: {err}")
     except Exception as err:
