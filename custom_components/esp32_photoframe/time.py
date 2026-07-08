@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .dynamic_entities import async_setup_firmware_gated_entities
 
 
 async def async_setup_entry(
@@ -19,19 +20,28 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the time platform."""
+    """Set up the time platform.
+
+    The sleep schedule is a legacy feature; these entities appear only while the
+    device runs firmware that still reports it (see async_setup_firmware_gated_entities).
+    """
     coordinator: PhotoFrameCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = [
-        PhotoFrameSleepScheduleStartTime(coordinator, entry),
-        PhotoFrameSleepScheduleEndTime(coordinator, entry),
-    ]
-
-    async_add_entities(entities)
+    async_setup_firmware_gated_entities(
+        hass,
+        coordinator,
+        async_add_entities,
+        "time",
+        "sleep_schedule_enabled",
+        [
+            lambda: PhotoFrameSleepScheduleStartTime(coordinator, entry),
+            lambda: PhotoFrameSleepScheduleEndTime(coordinator, entry),
+        ],
+    )
 
 
 class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEntity, TimeEntity):
-    """Sleep schedule start time for PhotoFrame."""
+    """Sleep schedule start time for PhotoFrame (legacy firmware only)."""
 
     _attr_has_entity_name = True
     _config_key = "sleep_schedule_start"
@@ -43,16 +53,6 @@ class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEnti
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_start"
         self._attr_name = "Sleep schedule start"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Unavailable on cron firmware, which dropped the sleep schedule."""
-        if not super().available:
-            return False
-        config = self.coordinator.data.get("config", {})
-        return "sleep_schedule_enabled" in config or self.coordinator.is_key_pending(
-            self._config_key
-        )
 
     @property
     def native_value(self) -> time | None:
@@ -70,7 +70,7 @@ class PhotoFrameSleepScheduleStartTime(PendingConfigEntityMixin, CoordinatorEnti
 
 
 class PhotoFrameSleepScheduleEndTime(PendingConfigEntityMixin, CoordinatorEntity, TimeEntity):
-    """Sleep schedule end time for PhotoFrame."""
+    """Sleep schedule end time for PhotoFrame (legacy firmware only)."""
 
     _attr_has_entity_name = True
     _config_key = "sleep_schedule_end"
@@ -82,16 +82,6 @@ class PhotoFrameSleepScheduleEndTime(PendingConfigEntityMixin, CoordinatorEntity
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule_end"
         self._attr_name = "Sleep schedule end"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Unavailable on cron firmware, which dropped the sleep schedule."""
-        if not super().available:
-            return False
-        config = self.coordinator.data.get("config", {})
-        return "sleep_schedule_enabled" in config or self.coordinator.is_key_pending(
-            self._config_key
-        )
 
     @property
     def native_value(self) -> time | None:

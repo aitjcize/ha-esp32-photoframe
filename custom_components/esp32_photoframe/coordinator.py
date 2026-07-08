@@ -63,8 +63,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self._availability_check_interval = timedelta(minutes=1)  # Check periodically when offline
         self._availability_check_task: asyncio.Task | None = None
 
-        # Cache last known config data from device
-        self._last_config_data: dict[str, Any] = {}
+        # Cache last known config data from device. Seeded from the config entry
+        # so firmware-gated entities resolve immediately after an HA restart,
+        # before the (deep-sleeping) device has checked in again.
+        self._last_config_data: dict[str, Any] = dict(entry.data.get("cached_config", {}))
 
         # Pending config changes to push to device when it next wakes up
         pending = entry.data.get("pending_config_changes", {})
@@ -155,6 +157,10 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Config data fetched: %s", bool(config_data))
             if config_data:
                 self._last_config_data = config_data
+                # Persist so firmware-gated entities and editable values survive
+                # an HA restart while the device is asleep (config isn't fetched
+                # again until it next wakes).
+                self._save_cached_config()
                 # Device is online — push any pending config changes now
                 if self._pending_config_changes:
                     _LOGGER.info(
@@ -401,6 +407,18 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             **self.entry.data,
             "pending_config_changes": dict(self._pending_config_changes),
         }
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+
+    def _save_cached_config(self) -> None:
+        """Persist the last known device config to the config entry.
+
+        Lets firmware-gated entities (and last-known editable values) resolve
+        right after an HA restart instead of waiting for the deep-sleeping
+        device to check in. No-op when nothing changed to avoid needless writes.
+        """
+        if self.entry.data.get("cached_config") == self._last_config_data:
+            return
+        new_data = {**self.entry.data, "cached_config": dict(self._last_config_data)}
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
     def is_key_pending(self, key: str) -> bool:

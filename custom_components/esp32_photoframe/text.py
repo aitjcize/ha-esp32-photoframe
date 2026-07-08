@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .dynamic_entities import async_setup_firmware_gated_entities
 
 # Firmware limits for the rotation schedule (main/config.h)
 MAX_CRON_RULES = 7
@@ -32,13 +33,23 @@ async def async_setup_entry(
     """Set up the text platform."""
     coordinator: PhotoFrameCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = [
-        PhotoFrameRotationScheduleText(coordinator, entry),
-        PhotoFrameImageUrlText(coordinator, entry),
-        PhotoFrameHaUrlText(coordinator, entry),
-    ]
+    async_add_entities(
+        [
+            PhotoFrameImageUrlText(coordinator, entry),
+            PhotoFrameHaUrlText(coordinator, entry),
+        ]
+    )
 
-    async_add_entities(entities)
+    # Cron firmware only: the rotation schedule replaced the legacy sleep
+    # schedule, so this appears only while the device reports rotate_cron.
+    async_setup_firmware_gated_entities(
+        hass,
+        coordinator,
+        async_add_entities,
+        "text",
+        "rotate_cron",
+        [lambda: PhotoFrameRotationScheduleText(coordinator, entry)],
+    )
 
 
 class PhotoFrameRotationScheduleText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):

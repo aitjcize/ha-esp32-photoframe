@@ -14,6 +14,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_HA_URL, DOMAIN, IMAGE_ENDPOINT_PATH
 from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .dynamic_entities import async_setup_firmware_gated_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,14 +27,24 @@ async def async_setup_entry(
     """Set up the switch platform."""
     coordinator: PhotoFrameCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    entities = [
-        PhotoFrameAutoRotateSwitch(coordinator, entry),
-        PhotoFrameDeepSleepSwitch(coordinator, entry),
-        PhotoFrameUseHAImagesSwitch(coordinator, entry, hass),
-        PhotoFrameSleepScheduleSwitch(coordinator, entry),
-    ]
+    async_add_entities(
+        [
+            PhotoFrameAutoRotateSwitch(coordinator, entry),
+            PhotoFrameDeepSleepSwitch(coordinator, entry),
+            PhotoFrameUseHAImagesSwitch(coordinator, entry, hass),
+        ]
+    )
 
-    async_add_entities(entities)
+    # Legacy firmware only: the sleep schedule was superseded by the cron
+    # rotation schedule, so this switch appears only while the device reports it.
+    async_setup_firmware_gated_entities(
+        hass,
+        coordinator,
+        async_add_entities,
+        "switch",
+        "sleep_schedule_enabled",
+        [lambda: PhotoFrameSleepScheduleSwitch(coordinator, entry)],
+    )
 
 
 class PhotoFrameAutoRotateSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):
@@ -145,7 +156,13 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
 
 
 class PhotoFrameSleepScheduleSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):
-    """Sleep schedule switch for PhotoFrame."""
+    """Sleep schedule switch for PhotoFrame (legacy firmware only).
+
+    The quiet-hours window was superseded by the cron rotation schedule, whose
+    rules carry their own active hours. Newer firmware no longer reports
+    sleep_schedule_enabled, so this entity is only registered while the device
+    does (see async_setup_firmware_gated_entities).
+    """
 
     _attr_has_entity_name = True
     _config_key = "sleep_schedule_enabled"
@@ -157,21 +174,6 @@ class PhotoFrameSleepScheduleSwitch(PendingConfigEntityMixin, CoordinatorEntity,
         self._attr_unique_id = f"{entry.entry_id}_sleep_schedule"
         self._attr_name = "Sleep schedule"
         self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Unavailable on cron firmware, which dropped the sleep schedule.
-
-        The quiet-hours window is a legacy feature; newer firmware bounds the
-        active hours in the rotation schedule (cron) rules instead and no
-        longer reports sleep_schedule_enabled.
-        """
-        if not super().available:
-            return False
-        config = self.coordinator.data.get("config", {})
-        return "sleep_schedule_enabled" in config or self.coordinator.is_key_pending(
-            self._config_key
-        )
 
     @property
     def is_on(self) -> bool:
