@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.9.2
+
+### Changed
+
+- **Firmware-aware scheduling entities.** Scheduling controls now appear only on
+  the firmware that supports them, instead of lingering as permanently
+  *unavailable*:
+  - The **Rotation schedule** (cron) text entity shows only on cron firmware.
+  - The legacy **Sleep schedule** switch and **Sleep schedule start**/**end**
+    times show only on pre-cron firmware.
+
+  The set is chosen from what the device reports, so an OTA between firmware
+  generations swaps the entities automatically — the stale ones are removed once
+  the device checks in on its new firmware (no manual cleanup needed).
+
+- The device's last-known config is now cached to the config entry, so entities
+  and their editable values resolve immediately after a Home Assistant restart
+  instead of waiting for a deep-sleeping frame to next check in.
+
 ## v2.9.1
 
 ### Changed
