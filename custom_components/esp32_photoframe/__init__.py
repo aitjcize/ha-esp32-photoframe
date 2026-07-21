@@ -27,6 +27,7 @@ PLATFORMS: list[Platform] = [
     Platform.BUTTON,
     Platform.IMAGE,
     Platform.TIME,
+    Platform.UPDATE,
 ]
 
 
