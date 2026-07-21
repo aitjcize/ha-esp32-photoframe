@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 from homeassistant.components.update import (
@@ -29,6 +30,9 @@ _ACTIVE_OTA_STATES = {"downloading", "installing"}
 _OTA_POLL_INTERVAL = 5
 _OTA_POLL_ATTEMPTS = 120
 _OTA_CHECK_ATTEMPTS = 40
+_GITHUB_RELEASE_API = "https://api.github.com/repos/aitjcize/esp32-photoframe/releases/tags/{tag}"
+_GITHUB_RELEASE_URL = "https://github.com/aitjcize/esp32-photoframe/releases/tag/{tag}"
+_GITHUB_HEADERS = {"Accept": "application/vnd.github+json"}
 
 
 async def async_setup_entry(
@@ -63,7 +67,11 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
     _attr_device_class = UpdateDeviceClass.FIRMWARE
     _attr_has_entity_name = True
     _attr_name = "Firmware"
-    _attr_supported_features = UpdateEntityFeature.INSTALL | UpdateEntityFeature.PROGRESS
+    _attr_supported_features = (
+        UpdateEntityFeature.INSTALL
+        | UpdateEntityFeature.PROGRESS
+        | UpdateEntityFeature.RELEASE_NOTES
+    )
 
     def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
         """Initialize the update entity."""
@@ -71,6 +79,8 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         self._attr_unique_id = f"{entry.entry_id}_firmware_update"
         self._attr_device_info = coordinator.device_info
         self._install_task: asyncio.Task[None] | None = None
+        self._release_notes_version: str | None = None
+        self._release_notes: str | None = None
 
     @property
     def available(self) -> bool:
@@ -86,6 +96,43 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
     def latest_version(self) -> str | None:
         """Return the latest firmware version."""
         return self.coordinator.data.get("ota", {}).get("latest_version") or None
+
+    @property
+    def release_url(self) -> str | None:
+        """Return the latest firmware release page URL."""
+        if not self.latest_version:
+            return None
+        return _GITHUB_RELEASE_URL.format(tag=quote(self.latest_version, safe=""))
+
+    async def async_release_notes(self) -> str | None:
+        """Fetch the latest firmware release notes from GitHub."""
+        version = self.latest_version
+        if not version:
+            return None
+        if self._release_notes_version == version:
+            return self._release_notes
+
+        try:
+            async with self.coordinator.session.get(
+                _GITHUB_RELEASE_API.format(tag=quote(version, safe="")),
+                headers=_GITHUB_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=15),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.warning(
+                        "Failed to fetch release notes for %s: HTTP %s",
+                        version,
+                        response.status,
+                    )
+                    return None
+                payload = await response.json()
+        except aiohttp.ClientError as err:
+            _LOGGER.warning("Failed to fetch release notes for %s: %s", version, err)
+            return None
+
+        self._release_notes_version = version
+        self._release_notes = payload.get("body") or None
+        return self._release_notes
 
     @property
     def in_progress(self) -> bool | int:
