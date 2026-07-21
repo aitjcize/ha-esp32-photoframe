@@ -29,7 +29,6 @@ async def async_setup_entry(
     entities = [
         PhotoFrameRotateButton(coordinator, entry),
         PhotoFrameRefreshButton(coordinator, entry),
-        PhotoFrameOTAUpdateButton(coordinator, entry),
         PhotoFrameSleepButton(coordinator, entry),
     ]
 
@@ -113,53 +112,6 @@ class PhotoFrameRefreshButton(CoordinatorEntity, ButtonEntity):
         """Handle the button press."""
         _LOGGER.info("Manual refresh requested - checking device availability")
         await self.coordinator.async_request_refresh()
-
-
-class PhotoFrameOTAUpdateButton(CoordinatorEntity, ButtonEntity):
-    """OTA update button for PhotoFrame."""
-
-    _attr_has_entity_name = True
-    _attr_icon = "mdi:download"
-
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the button."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_ota_update"
-        self._attr_name = "Update firmware"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available - only when update is available."""
-        if not self.coordinator.available:
-            return False
-
-        # Only enable button when update is available
-        ota_data = self.coordinator.data.get("ota", {})
-        state = ota_data.get("state", "idle")
-        return state == "update_available"
-
-    async def async_press(self) -> None:
-        """Handle the button press."""
-        # Fire and forget - don't wait for the OTA update to complete
-        # This prevents timeout errors when OTA takes a long time
-        asyncio.create_task(self._trigger_ota_update())
-        _LOGGER.info("OTA update triggered (fire-and-forget)")
-
-    async def _trigger_ota_update(self) -> None:
-        """Trigger OTA update in the background."""
-        try:
-            async with self.coordinator.session.post(
-                f"{self.coordinator.host}/api/ota/update",
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as response:
-                if response.status == 200:
-                    _LOGGER.info("OTA update started successfully")
-                    await self.coordinator.async_request_refresh()
-                else:
-                    _LOGGER.error("Failed to trigger OTA update: HTTP %s", response.status)
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Failed to trigger OTA update: %s", err)
 
 
 class PhotoFrameSleepButton(CoordinatorEntity, ButtonEntity):

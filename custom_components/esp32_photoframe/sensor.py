@@ -35,9 +35,6 @@ async def async_setup_entry(
         PhotoFrameChargingSensor(coordinator, entry),
         PhotoFrameUSBConnectedSensor(coordinator, entry),
         PhotoFrameBatteryConnectedSensor(coordinator, entry),
-        PhotoFrameCurrentVersionSensor(coordinator, entry),
-        PhotoFrameLatestVersionSensor(coordinator, entry),
-        PhotoFrameOTAStateSensor(coordinator, entry),
         PhotoFrameOnlineSensor(coordinator, entry),
         PhotoFrameTemperatureSensor(coordinator, entry),
         PhotoFrameHumiditySensor(coordinator, entry),
@@ -177,81 +174,6 @@ class PhotoFrameBatteryConnectedSensor(CoordinatorEntity, BinarySensorEntity):
         """Return true if battery is connected."""
         battery_data = self.coordinator.data.get("battery", {})
         return battery_data.get("battery_connected")
-
-
-class PhotoFrameCurrentVersionSensor(CoordinatorEntity, SensorEntity):
-    """Current firmware version sensor for PhotoFrame."""
-
-    _attr_has_entity_name = True
-    _attr_icon = "mdi:chip"
-
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_current_version"
-        self._attr_name = "Current version"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Current version sensor always available to show last known value."""
-        return True
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the current firmware version."""
-        ota_data = self.coordinator.data.get("ota", {})
-        return ota_data.get("current_version")
-
-
-class PhotoFrameLatestVersionSensor(CoordinatorEntity, SensorEntity):
-    """Latest firmware version sensor for PhotoFrame."""
-
-    _attr_has_entity_name = True
-    _attr_icon = "mdi:update"
-
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_latest_version"
-        self._attr_name = "Latest version"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Latest version sensor always available to show last known value."""
-        return True
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the latest firmware version."""
-        ota_data = self.coordinator.data.get("ota", {})
-        return ota_data.get("latest_version")
-
-
-class PhotoFrameOTAStateSensor(CoordinatorEntity, SensorEntity):
-    """OTA state sensor for PhotoFrame."""
-
-    _attr_has_entity_name = True
-    _attr_icon = "mdi:progress-download"
-
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_ota_state"
-        self._attr_name = "OTA state"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """OTA state sensor always available to show last known value."""
-        return True
-
-    @property
-    def native_value(self) -> str | None:
-        """Return the OTA state."""
-        ota_data = self.coordinator.data.get("ota", {})
-        return ota_data.get("state")
 
 
 class PhotoFrameOnlineSensor(CoordinatorEntity, BinarySensorEntity):
