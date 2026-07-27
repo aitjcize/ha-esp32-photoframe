@@ -253,7 +253,25 @@ class _PhotoFrameNetworkText(PendingConfigEntityMixin, CoordinatorEntity, TextEn
         await self.coordinator.async_set_config({self._config_key: value})
 
 
-class PhotoFrameStaticIpText(_PhotoFrameNetworkText):
+class _PhotoFrameStaticOnlyText(_PhotoFrameNetworkText):
+    """Static-address field, unavailable (grayed out) while the mode is DHCP.
+
+    HA has no state-conditional show/hide for entities, so unavailability is
+    the standard way to signal that a field doesn't currently apply. The check
+    reads the effective (pending-merged) config, so flipping the IP mode select
+    to "static" enables these fields immediately — before the device has even
+    seen the change — letting the user fill them in as part of the same batch.
+    """
+
+    @property
+    def available(self) -> bool:
+        if not super().available:
+            return False
+        config = self.coordinator.data.get("config", {})
+        return config.get("ip_mode", "dhcp") == "static"
+
+
+class PhotoFrameStaticIpText(_PhotoFrameStaticOnlyText):
     """Static IP address text entity."""
 
     _config_key = "static_ip"
@@ -264,7 +282,7 @@ class PhotoFrameStaticIpText(_PhotoFrameNetworkText):
         self._attr_name = "Static IP address"
 
 
-class PhotoFrameStaticNetmaskText(_PhotoFrameNetworkText):
+class PhotoFrameStaticNetmaskText(_PhotoFrameStaticOnlyText):
     """Static netmask text entity."""
 
     _config_key = "static_netmask"
@@ -275,7 +293,7 @@ class PhotoFrameStaticNetmaskText(_PhotoFrameNetworkText):
         self._attr_name = "Static netmask"
 
 
-class PhotoFrameStaticGatewayText(_PhotoFrameNetworkText):
+class PhotoFrameStaticGatewayText(_PhotoFrameStaticOnlyText):
     """Static gateway text entity."""
 
     _config_key = "static_gateway"
