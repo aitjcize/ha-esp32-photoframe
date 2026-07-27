@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.9.3
+
+### Added
+
+- **Advanced network entities.** New controls for the network configuration
+  added in firmware v2.15.0 (#43):
+  - **IP configuration** select (Automatic/DHCP or Static IP).
+  - **Static IP address**, **Static netmask** and **Static gateway** text
+    fields. These are grayed out (unavailable) while the mode is DHCP and
+    enable immediately when the select is flipped to *static*, so the whole
+    set can be filled in and pushed to the device as one batch.
+  - **DNS server** override text field, editable in both IP modes (empty =
+    automatic).
+
+  Like the scheduling entities, these appear only on firmware that supports
+  them — devices on older firmware are unaffected.
+- **NTP server** text entity (supported by all firmware versions).
+
 ## v2.9.2
 
 ### Changed
