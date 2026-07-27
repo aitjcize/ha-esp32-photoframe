@@ -37,7 +37,27 @@ async def async_setup_entry(
         [
             PhotoFrameImageUrlText(coordinator, entry),
             PhotoFrameHaUrlText(coordinator, entry),
+            # Advanced network settings: NTP is supported by all firmware
+            # versions, so it is not gated.
+            PhotoFrameNtpServerText(coordinator, entry),
         ]
+    )
+
+    # Advanced network settings (#43): static IP / DNS override exist only on
+    # firmware that reports ip_mode; on older firmware these entities are not
+    # created (and are removed if the device downgrades).
+    async_setup_firmware_gated_entities(
+        hass,
+        coordinator,
+        async_add_entities,
+        "text",
+        "ip_mode",
+        [
+            lambda: PhotoFrameStaticIpText(coordinator, entry),
+            lambda: PhotoFrameStaticNetmaskText(coordinator, entry),
+            lambda: PhotoFrameStaticGatewayText(coordinator, entry),
+            lambda: PhotoFrameDnsServerText(coordinator, entry),
+        ],
     )
 
     # Cron firmware only: the rotation schedule replaced the legacy sleep
@@ -177,3 +197,102 @@ class PhotoFrameHaUrlText(PendingConfigEntityMixin, CoordinatorEntity, TextEntit
     async def async_set_value(self, value: str) -> None:
         """Set the HA URL."""
         await self.coordinator.async_set_config({"ha_url": value})
+
+
+class PhotoFrameNtpServerText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):
+    """NTP server text entity for PhotoFrame."""
+
+    _attr_has_entity_name = True
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "ntp_server"
+    _default_icon = "mdi:clock-outline"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ntp_server"
+        self._attr_name = "NTP server"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the current NTP server."""
+        config = self.coordinator.data.get("config", {})
+        return config.get("ntp_server", "")
+
+    async def async_set_value(self, value: str) -> None:
+        """Set the NTP server."""
+        await self.coordinator.async_set_config({"ntp_server": value})
+
+
+class _PhotoFrameNetworkText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):
+    """Base for the advanced-network text entities (#43).
+
+    Values are dotted IPv4 strings; the firmware validates them and rejects the
+    save with an error on a malformed address.
+    """
+
+    _attr_has_entity_name = True
+    _attr_available = True  # Always editable, even when device is offline
+    _default_icon = "mdi:ip-network"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_{self._config_key}"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the current value."""
+        config = self.coordinator.data.get("config", {})
+        return config.get(self._config_key, "")
+
+    async def async_set_value(self, value: str) -> None:
+        """Set the value."""
+        await self.coordinator.async_set_config({self._config_key: value})
+
+
+class PhotoFrameStaticIpText(_PhotoFrameNetworkText):
+    """Static IP address text entity."""
+
+    _config_key = "static_ip"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator, entry)
+        self._attr_name = "Static IP address"
+
+
+class PhotoFrameStaticNetmaskText(_PhotoFrameNetworkText):
+    """Static netmask text entity."""
+
+    _config_key = "static_netmask"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator, entry)
+        self._attr_name = "Static netmask"
+
+
+class PhotoFrameStaticGatewayText(_PhotoFrameNetworkText):
+    """Static gateway text entity."""
+
+    _config_key = "static_gateway"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator, entry)
+        self._attr_name = "Static gateway"
+
+
+class PhotoFrameDnsServerText(_PhotoFrameNetworkText):
+    """DNS server override text entity."""
+
+    _config_key = "dns_server"
+    _default_icon = "mdi:dns"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator, entry)
+        self._attr_name = "DNS server"

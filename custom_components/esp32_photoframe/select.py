@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .dynamic_entities import async_setup_firmware_gated_entities
 
 
 async def async_setup_entry(
@@ -28,6 +29,17 @@ async def async_setup_entry(
     ]
 
     async_add_entities(entities)
+
+    # Advanced network settings (#43): only firmware reporting ip_mode
+    # supports static IP configuration.
+    async_setup_firmware_gated_entities(
+        hass,
+        coordinator,
+        async_add_entities,
+        "select",
+        "ip_mode",
+        [lambda: PhotoFrameIpModeSelect(coordinator, entry)],
+    )
 
 
 class PhotoFrameRotationModeSelect(PendingConfigEntityMixin, CoordinatorEntity, SelectEntity):
@@ -207,3 +219,35 @@ class PhotoFrameRotateEnabledSensorSelect(CoordinatorEntity, SelectEntity):
         new_options["rotate_sensor"] = option if option != "None" else ""
         self._hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
+
+
+class PhotoFrameIpModeSelect(PendingConfigEntityMixin, CoordinatorEntity, SelectEntity):
+    """IP configuration mode select for PhotoFrame (#43)."""
+
+    _attr_has_entity_name = True
+    _attr_options = ["dhcp", "static"]
+    _attr_available = True  # Always editable, even when device is offline
+    _config_key = "ip_mode"
+    _default_icon = "mdi:ip-network-outline"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the select."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_ip_mode"
+        self._attr_name = "IP configuration"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current IP mode."""
+        config = self.coordinator.data.get("config", {})
+        return config.get("ip_mode", "dhcp")
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the IP mode.
+
+        The firmware requires valid static_ip/netmask/gateway before accepting
+        static mode; it rejects the change otherwise, and the per-key retry in
+        the coordinator surfaces that as a discarded pending change.
+        """
+        await self.coordinator.async_set_config({"ip_mode": option})
