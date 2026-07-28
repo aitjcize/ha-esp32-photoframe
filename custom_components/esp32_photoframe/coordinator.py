@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -14,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -27,6 +29,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_IMAGE_STORAGE_VERSION = 1
 
 
 class PhotoFrameCoordinator(DataUpdateCoordinator):
@@ -50,6 +54,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
+        self._image_last_updated: datetime | None = None
+        self._image_store = Store(
+            hass,
+            _IMAGE_STORAGE_VERSION,
+            f"{DOMAIN}.image.{entry.entry_id}",
+        )
 
         # Track if last image fetch was successful (to prevent timestamp updates on failures)
         self._image_fetch_successful: bool = False
@@ -104,6 +114,25 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self._availability_check_task = hass.async_create_background_task(
             self._availability_check_loop(),
             name=f"esp32_photoframe_{self.host}_availability_check",
+        )
+
+    async def async_restore_cached_image(self) -> None:
+        """Restore the last displayed image from Home Assistant storage."""
+        stored = await self._image_store.async_load()
+        if not stored:
+            return
+
+        try:
+            self._cached_image = base64.b64decode(stored["image"], validate=True)
+            self._image_last_updated = datetime.fromisoformat(stored["last_updated"])
+        except (KeyError, TypeError, ValueError):
+            _LOGGER.warning("Ignoring invalid cached image data for %s", self.host)
+            self._cached_image = None
+            self._image_last_updated = None
+            return
+
+        _LOGGER.debug(
+            "Restored cached current image (%d bytes)", len(self._cached_image)
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -381,12 +410,23 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as response:
                 if response.status == 200:
-                    self._cached_image = await response.read()
-                    self._image_fetch_successful = True  # Mark as successful
-                    _LOGGER.debug(
-                        "Fetched and cached current image (%d bytes)",
-                        len(self._cached_image),
-                    )
+                    image = await response.read()
+                    if image != self._cached_image:
+                        self._cached_image = image
+                        self._image_last_updated = datetime.now()
+                        self._image_fetch_successful = True
+                        await self._image_store.async_save(
+                            {
+                                "image": base64.b64encode(image).decode("ascii"),
+                                "last_updated": self._image_last_updated.isoformat(),
+                            }
+                        )
+                        _LOGGER.debug(
+                            "Fetched changed current image (%d bytes)",
+                            len(image),
+                        )
+                    else:
+                        _LOGGER.debug("Current image is unchanged")
                 elif response.status == 404:
                     _LOGGER.debug("No image currently displayed on device")
                     # Don't clear cache - keep showing last known image
