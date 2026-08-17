@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.10.0
+
+### Added
+
+- **Photo scale mode and fit background entities.** A *Photo scale mode*
+  select (cover/fit) and a *Fit background color* select (white/black)
+  control how the frame lays out photos, backed by the device's synced
+  processing settings — a change made in Home Assistant reaches the
+  device, the server, and the web apps. Requires firmware v2.16.0; on
+  older firmware the entities show as unavailable.
+- **Full processing-settings parity.** Dither algorithm, tone mapping and
+  color matching selects; exposure, saturation, contrast and the four
+  s-curve numbers; and a compress-dynamic-range switch. All are
+  registry-disabled by default (image tuning is a set-once affair —
+  enable the ones you automate) and unavailable while the frame sleeps.
+  Writes fetch the frame's current settings and merge the change under a
+  lock, so concurrent automations and device-side edits can't overwrite
+  each other.
+
+
 ## v2.9.3
 
 ### Added
