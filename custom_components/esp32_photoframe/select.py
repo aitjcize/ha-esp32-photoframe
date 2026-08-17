@@ -25,6 +25,8 @@ async def async_setup_entry(
         PhotoFrameRotationModeSelect(coordinator, entry),
         PhotoFrameMediaEntitySelect(coordinator, entry, hass),
         PhotoFrameDisplayOrientationSelect(coordinator, entry),
+        PhotoFrameScaleModeSelect(coordinator, entry),
+        PhotoFrameFitBackgroundSelect(coordinator, entry),
         PhotoFrameRotateEnabledSensorSelect(coordinator, entry, hass),
     ]
 
@@ -162,6 +164,74 @@ class PhotoFrameDisplayOrientationSelect(PendingConfigEntityMixin, CoordinatorEn
     async def async_select_option(self, option: str) -> None:
         """Set the display orientation."""
         await self.coordinator.async_set_config({"display_orientation": option})
+
+
+class PhotoFrameScaleModeSelect(CoordinatorEntity, SelectEntity):
+    """Photo scale mode (cover/fit) select for PhotoFrame.
+
+    Backed by the device's processing settings (synced to the server via the
+    X-Processing-Settings header), not the config endpoint, so changes need
+    the device awake.
+    """
+
+    _attr_has_entity_name = True
+    _attr_options = ["cover", "fit"]
+    _attr_icon = "mdi:crop"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the select."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_scale_mode"
+        self._attr_name = "Photo scale mode"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Needs the device awake and firmware that reports scaleMode."""
+        settings = self.coordinator.data.get("processing_settings", {})
+        return super().available and self.coordinator.available and "scaleMode" in settings
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current scale mode."""
+        settings = self.coordinator.data.get("processing_settings", {})
+        return settings.get("scaleMode", "cover")
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the scale mode."""
+        await self.coordinator.async_set_processing_settings({"scaleMode": option})
+
+
+class PhotoFrameFitBackgroundSelect(CoordinatorEntity, SelectEntity):
+    """Letterbox background color select for PhotoFrame fit mode."""
+
+    _attr_has_entity_name = True
+    _attr_options = ["white", "black", "red", "green", "blue", "yellow"]
+    _attr_icon = "mdi:format-color-fill"
+    _attr_entity_registry_enabled_default = False  # only relevant in fit mode
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the select."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_fit_background_color"
+        self._attr_name = "Fit background color"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Needs the device awake and firmware that reports backgroundColor."""
+        settings = self.coordinator.data.get("processing_settings", {})
+        return super().available and self.coordinator.available and "backgroundColor" in settings
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current background color."""
+        settings = self.coordinator.data.get("processing_settings", {})
+        return settings.get("backgroundColor", "white")
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the letterbox background color."""
+        await self.coordinator.async_set_processing_settings({"backgroundColor": option})
 
 
 class PhotoFrameRotateEnabledSensorSelect(CoordinatorEntity, SelectEntity):

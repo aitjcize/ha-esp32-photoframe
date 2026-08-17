@@ -21,6 +21,7 @@ from .const import (
     API_CONFIG,
     API_DISPLAY_IMAGE,
     API_OTA_STATUS,
+    API_PROCESSING_SETTINGS,
     API_SENSOR,
     API_SYSTEM_INFO,
     DOMAIN,
@@ -47,6 +48,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
 
         # Store last known sensor data to preserve when device is asleep
         self._last_sensor_data = {}
+        self._last_processing_settings = {}
+        # Serializes read/modify/write of the full processing-settings object
+        self._processing_settings_lock = asyncio.Lock()
+        # Bumped on every successful write; a polling refresh discards its
+        # fetched snapshot when a write landed while the fetch was in flight
+        self._processing_settings_version = 0
 
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
@@ -169,6 +176,16 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     )
                     self.hass.async_create_task(self.async_push_pending_config())
 
+            # Try to fetch processing settings (scale mode etc.); best-effort.
+            # The snapshot only replaces the cache when no select write landed
+            # while the fetch was in flight -- otherwise the write's newer
+            # value must win (the return below reads the cache, not this
+            # snapshot, for the same reason).
+            settings_version = self._processing_settings_version
+            fetched_settings = await self._fetch_processing_settings()
+            if fetched_settings and settings_version == self._processing_settings_version:
+                self._last_processing_settings = fetched_settings
+
             # Try to fetch OTA data
             _LOGGER.debug("Fetching OTA status from %s", self.host)
             ota_data = await self._fetch_ota_status()
@@ -217,6 +234,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 "battery": battery_data,
                 "ota": ota_data,
                 "sensor": sensor_data,
+                "processing_settings": self._last_processing_settings,
             }
         except (
             aiohttp.ClientError,
@@ -232,6 +250,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                     "battery": self._last_battery_data,
                     "ota": self._last_ota_data,
                     "sensor": self._last_sensor_data,
+                    "processing_settings": self._last_processing_settings,
                 }
             # Device is offline during setup (e.g., HA restart while device asleep)
             # Return empty data to allow integration to load - it will update when device wakes
@@ -244,6 +263,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                 "battery": {},
                 "ota": {},
                 "sensor": {},
+                "processing_settings": self._last_processing_settings,
             }
 
     async def _fetch_config(self) -> dict[str, Any]:
@@ -277,6 +297,63 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         except aiohttp.ClientError as err:
             _LOGGER.debug("Failed to fetch battery data: %s", err)
             return {}
+
+    async def _fetch_processing_settings(self) -> dict[str, Any]:
+        """Fetch processing settings (scale mode etc.) from photoframe."""
+        try:
+            async with self.session.get(
+                f"{self.host}{API_PROCESSING_SETTINGS}",
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                if response.status != 200:
+                    _LOGGER.debug("Processing settings endpoint returned HTTP %s", response.status)
+                    return {}
+                return await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            _LOGGER.debug("Failed to fetch processing settings: %s", err)
+            return {}
+
+    async def async_set_processing_settings(self, changes: dict[str, Any]) -> bool:
+        """Merge changes into the device's processing settings and save them.
+
+        The device's POST handler starts from defaults and overlays the given
+        fields, so the FULL settings object must be sent -- fetch the current
+        values first and merge the change in.
+        """
+        # The whole read/modify/write runs under a lock: concurrent changes
+        # (e.g. parallel automation branches) would otherwise both merge into
+        # the same snapshot and the last full-object POST would silently
+        # revert the first change.
+        async with self._processing_settings_lock:
+            # A fresh snapshot is required: merging into a cached copy could
+            # overwrite settings changed through the device web UI since the
+            # cache was taken (the POST replaces the full object).
+            current = await self._fetch_processing_settings()
+            if not current:
+                raise HomeAssistantError(
+                    "PhotoFrame is unreachable; processing settings can only be "
+                    "changed while the device is awake"
+                )
+
+            merged = {**current, **changes}
+            try:
+                async with self.session.post(
+                    f"{self.host}{API_PROCESSING_SETTINGS}",
+                    json=merged,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as response:
+                    if response.status != 200:
+                        raise HomeAssistantError(
+                            f"PhotoFrame rejected the processing settings: HTTP {response.status}"
+                        )
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+                raise HomeAssistantError(f"Failed to update processing settings: {err}") from err
+
+            self._last_processing_settings = merged
+            self._processing_settings_version += 1
+            if self.data is not None:
+                self.async_set_updated_data({**self.data, "processing_settings": merged})
+            return True
 
     async def _fetch_ota_status(self) -> dict[str, Any]:
         """Fetch OTA status data from photoframe."""

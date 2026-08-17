@@ -19,6 +19,7 @@ API_DISPLAY_IMAGE = "/api/display-image"
 API_ROTATE = "/api/rotate"
 API_OTA_STATUS = "/api/ota/status"
 API_CURRENT_IMAGE = "/api/current_image"
+API_PROCESSING_SETTINGS = "/api/settings/processing"
 
 # Services
 SERVICE_ROTATE = "rotate"
