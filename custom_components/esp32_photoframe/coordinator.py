@@ -709,6 +709,29 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         )  # Default sdcard_inserted to True for backward compatibility
 
 
+class ProcessingSettingEntityMixin:
+    """Availability and accessors for entities backed by one field of the
+    device's processing settings (written via async_set_processing_settings).
+
+    Firmware that predates the field never reports it, and the settings
+    endpoint needs the device awake -- both make the entity unavailable.
+    """
+
+    _setting_key: str
+
+    @property
+    def _processing_settings(self) -> dict[str, Any]:
+        return self.coordinator.data.get("processing_settings", {})
+
+    @property
+    def available(self) -> bool:
+        return (
+            super().available
+            and self.coordinator.available
+            and self._setting_key in self._processing_settings
+        )
+
+
 class PendingConfigEntityMixin:
     """Mixin for entities backed by a config key that may have pending changes.
 

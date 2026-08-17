@@ -13,7 +13,11 @@ from homeassistant.helpers.network import get_url
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_HA_URL, DOMAIN, IMAGE_ENDPOINT_PATH
-from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .coordinator import (
+    PendingConfigEntityMixin,
+    PhotoFrameCoordinator,
+    ProcessingSettingEntityMixin,
+)
 from .dynamic_entities import async_setup_firmware_gated_entities
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,6 +34,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             PhotoFrameAutoRotateSwitch(coordinator, entry),
+            PhotoFrameCompressDynamicRangeSwitch(coordinator, entry),
             PhotoFrameDeepSleepSwitch(coordinator, entry),
             PhotoFrameUseHAImagesSwitch(coordinator, entry, hass),
         ]
@@ -188,3 +193,39 @@ class PhotoFrameSleepScheduleSwitch(PendingConfigEntityMixin, CoordinatorEntity,
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable sleep schedule."""
         await self.coordinator.async_set_config({"sleep_schedule_enabled": False})
+
+
+class PhotoFrameCompressDynamicRangeSwitch(
+    ProcessingSettingEntityMixin, CoordinatorEntity, SwitchEntity
+):
+    """Compress-dynamic-range toggle for PhotoFrame image processing.
+
+    Registry-disabled by default; written via the processing-settings
+    endpoint, so it needs the device awake and firmware that reports the
+    field.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = False
+    _attr_icon = "mdi:arrow-collapse-vertical"
+    _setting_key = "compressDynamicRange"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_proc_compress_dynamic_range"
+        self._attr_name = "Compress dynamic range"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def is_on(self) -> bool:
+        """Return whether dynamic-range compression is enabled."""
+        return bool(self._processing_settings.get(self._setting_key, True))
+
+    async def async_turn_on(self, **kwargs) -> None:
+        """Enable dynamic-range compression."""
+        await self.coordinator.async_set_processing_settings({self._setting_key: True})
+
+    async def async_turn_off(self, **kwargs) -> None:
+        """Disable dynamic-range compression."""
+        await self.coordinator.async_set_processing_settings({self._setting_key: False})

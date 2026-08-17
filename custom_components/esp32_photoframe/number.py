@@ -10,7 +10,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .coordinator import (
+    PendingConfigEntityMixin,
+    PhotoFrameCoordinator,
+    ProcessingSettingEntityMixin,
+)
 
 
 async def async_setup_entry(
@@ -31,6 +35,13 @@ async def async_setup_entry(
 
     entities = [
         PhotoFrameTimezoneOffsetNumber(coordinator, entry),
+        PhotoFrameExposureNumber(coordinator, entry),
+        PhotoFrameSaturationNumber(coordinator, entry),
+        PhotoFrameContrastNumber(coordinator, entry),
+        PhotoFrameScurveStrengthNumber(coordinator, entry),
+        PhotoFrameScurveShadowBoostNumber(coordinator, entry),
+        PhotoFrameScurveHighlightCompressNumber(coordinator, entry),
+        PhotoFrameScurveMidpointNumber(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -89,3 +100,125 @@ class PhotoFrameTimezoneOffsetNumber(PendingConfigEntityMixin, CoordinatorEntity
                 timezone = f"UTC{sign}{hours}:{minutes:02d}"
 
         await self.coordinator.async_set_config({"timezone": timezone})
+
+
+class PhotoFrameProcessingNumber(ProcessingSettingEntityMixin, CoordinatorEntity, NumberEntity):
+    """Number backed by one field of the device's processing settings.
+
+    Registry-disabled by default: these are image-tuning parameters most
+    installs set once in the web UI. Firmware that predates the field, or a
+    sleeping device, leaves the entity unavailable.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = False
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_step = 0.01
+    _unique_suffix: str
+    _default: float
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the number."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_{self._unique_suffix}"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current value."""
+        value = self._processing_settings.get(self._setting_key, self._default)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return self._default
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the value."""
+        await self.coordinator.async_set_processing_settings({self._setting_key: value})
+
+
+class PhotoFrameExposureNumber(PhotoFrameProcessingNumber):
+    """Exposure multiplier for PhotoFrame image processing."""
+
+    _attr_native_min_value = 0.5
+    _attr_native_max_value = 2.0
+    _attr_icon = "mdi:white-balance-sunny"
+    _attr_name = "Exposure"
+    _setting_key = "exposure"
+    _unique_suffix = "proc_exposure"
+    _default = 1.0
+
+
+class PhotoFrameSaturationNumber(PhotoFrameProcessingNumber):
+    """Saturation multiplier for PhotoFrame image processing."""
+
+    # The grayscale preset stores 0.0, below the web UI's slider floor
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 2.0
+    _attr_icon = "mdi:palette-outline"
+    _attr_name = "Saturation"
+    _setting_key = "saturation"
+    _unique_suffix = "proc_saturation"
+    _default = 1.0
+
+
+class PhotoFrameContrastNumber(PhotoFrameProcessingNumber):
+    """Contrast for PhotoFrame image processing (contrast tone mode)."""
+
+    _attr_native_min_value = 0.5
+    _attr_native_max_value = 2.0
+    _attr_icon = "mdi:contrast-box"
+    _attr_name = "Contrast"
+    _setting_key = "contrast"
+    _unique_suffix = "proc_contrast"
+    _default = 1.0
+
+
+class PhotoFrameScurveStrengthNumber(PhotoFrameProcessingNumber):
+    """S-curve strength for PhotoFrame image processing."""
+
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 1.0
+    _attr_icon = "mdi:chart-bell-curve"
+    _attr_name = "S-curve strength"
+    _setting_key = "strength"
+    _unique_suffix = "proc_strength"
+    _default = 0.5
+
+
+class PhotoFrameScurveShadowBoostNumber(PhotoFrameProcessingNumber):
+    """S-curve shadow boost for PhotoFrame image processing."""
+
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 1.0
+    _attr_icon = "mdi:brightness-4"
+    _attr_name = "S-curve shadow boost"
+    _setting_key = "shadowBoost"
+    _unique_suffix = "proc_shadow_boost"
+    _default = 0.0
+
+
+class PhotoFrameScurveHighlightCompressNumber(PhotoFrameProcessingNumber):
+    """S-curve highlight compression for PhotoFrame image processing."""
+
+    # The firmware default is 0.0 (contrast tone mode), below the web UI's
+    # s-curve slider floor of 0.5
+    _attr_native_min_value = 0.0
+    _attr_native_max_value = 5.0
+    _attr_icon = "mdi:brightness-7"
+    _attr_name = "S-curve highlight compress"
+    _setting_key = "highlightCompress"
+    _unique_suffix = "proc_highlight_compress"
+    _default = 0.0
+
+
+class PhotoFrameScurveMidpointNumber(PhotoFrameProcessingNumber):
+    """S-curve midpoint for PhotoFrame image processing."""
+
+    _attr_native_min_value = 0.3
+    _attr_native_max_value = 0.7
+    _attr_icon = "mdi:circle-half-full"
+    _attr_name = "S-curve midpoint"
+    _setting_key = "midpoint"
+    _unique_suffix = "proc_midpoint"
+    _default = 0.5

@@ -9,7 +9,11 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
+from .coordinator import (
+    PendingConfigEntityMixin,
+    PhotoFrameCoordinator,
+    ProcessingSettingEntityMixin,
+)
 from .dynamic_entities import async_setup_firmware_gated_entities
 
 
@@ -27,6 +31,9 @@ async def async_setup_entry(
         PhotoFrameDisplayOrientationSelect(coordinator, entry),
         PhotoFrameScaleModeSelect(coordinator, entry),
         PhotoFrameFitBackgroundSelect(coordinator, entry),
+        PhotoFrameDitherAlgorithmSelect(coordinator, entry),
+        PhotoFrameToneModeSelect(coordinator, entry),
+        PhotoFrameColorMethodSelect(coordinator, entry),
         PhotoFrameRotateEnabledSensorSelect(coordinator, entry, hass),
     ]
 
@@ -166,72 +173,92 @@ class PhotoFrameDisplayOrientationSelect(PendingConfigEntityMixin, CoordinatorEn
         await self.coordinator.async_set_config({"display_orientation": option})
 
 
-class PhotoFrameScaleModeSelect(CoordinatorEntity, SelectEntity):
-    """Photo scale mode (cover/fit) select for PhotoFrame.
+class PhotoFrameProcessingSelect(ProcessingSettingEntityMixin, CoordinatorEntity, SelectEntity):
+    """Select backed by one field of the device's processing settings.
 
-    Backed by the device's processing settings (synced to the server via the
-    X-Processing-Settings header), not the config endpoint, so changes need
-    the device awake.
+    These write via the processing-settings endpoint (synced to the server
+    through the X-Processing-Settings header), not the config endpoint, so
+    changes need the device awake; firmware that predates the field leaves
+    the entity unavailable.
     """
 
     _attr_has_entity_name = True
+    _unique_suffix: str
+    _default: str
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the select."""
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_{self._unique_suffix}"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def current_option(self) -> str | None:
+        """Return the current value."""
+        return self._processing_settings.get(self._setting_key, self._default)
+
+    async def async_select_option(self, option: str) -> None:
+        """Set the value."""
+        await self.coordinator.async_set_processing_settings({self._setting_key: option})
+
+
+class PhotoFrameScaleModeSelect(PhotoFrameProcessingSelect):
+    """Photo scale mode (cover/fit) select for PhotoFrame."""
+
     _attr_options = ["cover", "fit"]
     _attr_icon = "mdi:crop"
-
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the select."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_scale_mode"
-        self._attr_name = "Photo scale mode"
-        self._attr_device_info = coordinator.device_info
-
-    @property
-    def available(self) -> bool:
-        """Needs the device awake and firmware that reports scaleMode."""
-        settings = self.coordinator.data.get("processing_settings", {})
-        return super().available and self.coordinator.available and "scaleMode" in settings
-
-    @property
-    def current_option(self) -> str | None:
-        """Return the current scale mode."""
-        settings = self.coordinator.data.get("processing_settings", {})
-        return settings.get("scaleMode", "cover")
-
-    async def async_select_option(self, option: str) -> None:
-        """Set the scale mode."""
-        await self.coordinator.async_set_processing_settings({"scaleMode": option})
+    _attr_name = "Photo scale mode"
+    _setting_key = "scaleMode"
+    _unique_suffix = "scale_mode"
+    _default = "cover"
 
 
-class PhotoFrameFitBackgroundSelect(CoordinatorEntity, SelectEntity):
+class PhotoFrameFitBackgroundSelect(PhotoFrameProcessingSelect):
     """Letterbox background color select for PhotoFrame fit mode."""
 
-    _attr_has_entity_name = True
-    _attr_options = ["white", "black", "red", "green", "blue", "yellow"]
+    _attr_options = ["white", "black"]
     _attr_icon = "mdi:format-color-fill"
     _attr_entity_registry_enabled_default = False  # only relevant in fit mode
+    _attr_name = "Fit background color"
+    _setting_key = "backgroundColor"
+    _unique_suffix = "fit_background_color"
+    _default = "white"
 
-    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
-        """Initialize the select."""
-        super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_fit_background_color"
-        self._attr_name = "Fit background color"
-        self._attr_device_info = coordinator.device_info
 
-    @property
-    def available(self) -> bool:
-        """Needs the device awake and firmware that reports backgroundColor."""
-        settings = self.coordinator.data.get("processing_settings", {})
-        return super().available and self.coordinator.available and "backgroundColor" in settings
+class PhotoFrameDitherAlgorithmSelect(PhotoFrameProcessingSelect):
+    """Dither algorithm select for PhotoFrame."""
 
-    @property
-    def current_option(self) -> str | None:
-        """Return the current background color."""
-        settings = self.coordinator.data.get("processing_settings", {})
-        return settings.get("backgroundColor", "white")
+    _attr_options = ["floyd-steinberg", "stucki", "burkes", "sierra"]
+    _attr_icon = "mdi:blur-linear"
+    _attr_entity_registry_enabled_default = False
+    _attr_name = "Dither algorithm"
+    _setting_key = "ditherAlgorithm"
+    _unique_suffix = "dither_algorithm"
+    _default = "floyd-steinberg"
 
-    async def async_select_option(self, option: str) -> None:
-        """Set the letterbox background color."""
-        await self.coordinator.async_set_processing_settings({"backgroundColor": option})
+
+class PhotoFrameToneModeSelect(PhotoFrameProcessingSelect):
+    """Tone mapping mode select for PhotoFrame."""
+
+    _attr_options = ["contrast", "scurve"]
+    _attr_icon = "mdi:chart-bell-curve-cumulative"
+    _attr_entity_registry_enabled_default = False
+    _attr_name = "Tone mapping"
+    _setting_key = "toneMode"
+    _unique_suffix = "tone_mode"
+    _default = "contrast"
+
+
+class PhotoFrameColorMethodSelect(PhotoFrameProcessingSelect):
+    """Color matching method select for PhotoFrame."""
+
+    _attr_options = ["rgb", "lab"]
+    _attr_icon = "mdi:palette"
+    _attr_entity_registry_enabled_default = False
+    _attr_name = "Color matching"
+    _setting_key = "colorMethod"
+    _unique_suffix = "color_method"
+    _default = "rgb"
 
 
 class PhotoFrameRotateEnabledSensorSelect(CoordinatorEntity, SelectEntity):
