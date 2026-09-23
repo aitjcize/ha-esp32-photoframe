@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
@@ -30,13 +31,89 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class _AuthedSession:
+    """Wraps HA's shared aiohttp session, attaching Basic auth to every call.
+
+    The frame ignores the username; the password is the whole credential.
+    Wrapping the session rather than passing ``auth=`` at each call site means
+    a request added later cannot silently go out unauthenticated -- there are
+    already fifteen across the coordinator, buttons and services. The shared
+    session itself is never mutated: it belongs to Home Assistant and is used
+    by every other integration.
+    """
+
+    def __init__(self, session, authorization: str):
+        self._session = session
+        self._authorization = authorization
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def _with_auth(self, method, *args, **kwargs):
+        # A header rather than ``auth=``: aiohttp 3.14 deprecates both the
+        # ``auth`` argument and BasicAuth, and drops them in 4.0.
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault("Authorization", self._authorization)
+        kwargs["headers"] = headers
+        return method(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        return self._with_auth(self._session.get, *args, **kwargs)
+
+    def post(self, *args, **kwargs):
+        return self._with_auth(self._session.post, *args, **kwargs)
+
+    def put(self, *args, **kwargs):
+        return self._with_auth(self._session.put, *args, **kwargs)
+
+    def patch(self, *args, **kwargs):
+        return self._with_auth(self._session.patch, *args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        return self._with_auth(self._session.delete, *args, **kwargs)
+
+    def head(self, *args, **kwargs):
+        return self._with_auth(self._session.head, *args, **kwargs)
+
+    def request(self, *args, **kwargs):
+        return self._with_auth(self._session.request, *args, **kwargs)
+
+
+def frame_authorization(password: str) -> str:
+    """Basic ``Authorization`` header value for the frame's HTTP API.
+
+    The frame ignores the username; the password is the whole credential.
+    UTF-8 per RFC 7617, which is also what a browser sends to the frame's own
+    web UI, so a non-ASCII password matches either way.
+    """
+    token = base64.b64encode(f"photoframe:{password}".encode()).decode("ascii")
+    return f"Basic {token}"
+
+
+def _authed_session(session, password: str):
+    """Return the session unchanged when no password is configured."""
+    if not password:
+        return session
+    return _AuthedSession(session, frame_authorization(password))
+
+
+def _entry_password(entry: ConfigEntry) -> str:
+    """The frame password: the options flow value wins over the setup value."""
+    return entry.options.get(CONF_PASSWORD, entry.data.get(CONF_PASSWORD, "")) or ""
+
+
 class PhotoFrameCoordinator(DataUpdateCoordinator):
     """Class to manage fetching PhotoFrame data."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize."""
         self.host = entry.data[CONF_HOST]
-        self.session = async_get_clientsession(hass)
+        # A frame may require a password on its own HTTP API
+        # (esp32-photoframe #130). Options win so it can be changed without
+        # re-adding the integration; empty means the frame is open, which is
+        # the firmware default.
+        self._password = _entry_password(entry)
+        self.session = _authed_session(async_get_clientsession(hass), self._password)
         self.entry = entry
         self.hass = hass
 
@@ -112,6 +189,21 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             self._availability_check_loop(),
             name=f"esp32_photoframe_{self.host}_availability_check",
         )
+
+    def async_apply_entry_password(self) -> None:
+        """Pick up a password changed through the options flow.
+
+        The session is swapped in place rather than reloading the entry: the
+        entities also write entry.options (media entity, rotate sensor, HA image
+        serving), and every one of those would otherwise reload the whole
+        integration. Callers read ``coordinator.session`` per request, so the
+        next request uses the new credential.
+        """
+        password = _entry_password(self.entry)
+        if password == self._password:
+            return
+        self._password = password
+        self.session = _authed_session(async_get_clientsession(self.hass), password)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""

@@ -8,19 +8,29 @@ from typing import Any
 import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_HOST, CONF_PASSWORD
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import get_url
 
 from .const import API_SYSTEM_INFO, CONF_HA_URL, DOMAIN
+from .coordinator import frame_authorization
 
 _LOGGER = logging.getLogger(__name__)
+
+# Masked in the UI; the frame's password should not sit on screen in the clear.
+PASSWORD_SELECTOR = selector.TextSelector(
+    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
+        # Only needed when the frame has its own HTTP API password enabled
+        # (esp32-photoframe #130). Frames are open by default.
+        vol.Optional(CONF_PASSWORD, default=""): PASSWORD_SELECTOR,
     }
 )
 
@@ -41,16 +51,26 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # Test connection to photoframe and fetch device name + id. Both come from
     # /api/system-info (the canonical source for device identity).
     session = async_get_clientsession(hass)
+    password = data.get(CONF_PASSWORD) or ""
+    headers = {"Authorization": frame_authorization(password)} if password else None
     device_name = None
     try:
         async with session.get(
-            f"{host}{API_SYSTEM_INFO}", timeout=aiohttp.ClientTimeout(total=10)
+            f"{host}{API_SYSTEM_INFO}",
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
+            if response.status == 401:
+                raise InvalidAuth("The frame requires a password for its HTTP API")
             if response.status != 200:
                 raise CannotConnect(f"HTTP {response.status}")
             system_info = await response.json()
             device_name = system_info.get("device_name", "ESP32-PhotoFrame")
             device_id = system_info.get("device_id")
+    except InvalidAuth:
+        # Must not fall into the catch-all below, which would report a wrong
+        # password as a connection failure.
+        raise
     except aiohttp.ClientError as err:
         raise CannotConnect(f"Connection failed: {err}")
     except Exception as err:
@@ -71,6 +91,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         async with session.post(
             f"{host}/api/config",
             json={"ha_url": ha_url},
+            headers=headers,
             timeout=aiohttp.ClientTimeout(total=10),
         ) as response:
             if response.status != 200:
@@ -85,11 +106,20 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         "ha_url": ha_url,
         "device_name": device_name,
         "device_id": device_id,
+        "password": password,
     }
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for ESP32 PhotoFrame."""
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        entry: config_entries.ConfigEntry,
+    ) -> PhotoFrameOptionsFlow:
+        """Return the options flow (used to set the frame password)."""
+        return PhotoFrameOptionsFlow(entry)
 
     VERSION = 1
 
@@ -104,6 +134,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 info = await validate_input(self.hass, user_input)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except DuplicateDeviceName as err:
@@ -150,6 +182,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_HA_URL: info["ha_url"],
                     "device_name": info.get("device_name"),
                     "device_id": info.get("device_id"),
+                    CONF_PASSWORD: info.get("password", ""),
                 },
             )
 
@@ -162,9 +195,49 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
 
+class PhotoFrameOptionsFlow(config_entries.OptionsFlow):
+    """Lets the frame's HTTP API password be set or changed after setup."""
+
+    def __init__(self, entry: config_entries.ConfigEntry) -> None:
+        self._entry = entry
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # entry.options also holds settings the entities write directly
+            # (media_entity_id, rotate_sensor, use_ha_images); replacing the
+            # whole dict here would silently reset them.
+            return self.async_create_entry(
+                title="",
+                data={
+                    **self._entry.options,
+                    CONF_PASSWORD: user_input.get(CONF_PASSWORD) or "",
+                },
+            )
+
+        current = self._entry.options.get(CONF_PASSWORD, self._entry.data.get(CONF_PASSWORD, ""))
+        # A suggested value rather than a default: with a default, clearing the
+        # field submits nothing and voluptuous would put the old password back,
+        # so a password could never be removed.
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_PASSWORD, description={"suggested_value": current}
+                    ): PASSWORD_SELECTOR
+                }
+            ),
+        )
+
+
 class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
 
 
 class DuplicateDeviceName(Exception):
     """Error to indicate device name is already in use."""
+
+
+class InvalidAuth(Exception):
+    """Error to indicate the frame rejected the password."""

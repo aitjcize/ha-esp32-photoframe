@@ -6,11 +6,13 @@
         "description": "Enter the connection details for your PhotoFrame device.\n\n💡 Tip: If the device appears offline and is battery-powered, press the BOOT button to wake it up.",
         "data": {
           "host": "PhotoFrame IP or hostname",
-          "ha_url": "Home Assistant URL"
+          "ha_url": "Home Assistant URL",
+          "password": "Frame password (optional)"
         },
         "data_description": {
           "host": "The IP address or hostname of your PhotoFrame device",
-          "ha_url": "The URL where Home Assistant can be accessed, used by the PhotoFrame to fetch images"
+          "ha_url": "The URL where Home Assistant can be accessed, used by the PhotoFrame to fetch images",
+          "password": "Only needed if you enabled password protection on the PhotoFrame's own web interface. Leave blank otherwise."
         }
       },
       "confirm": {
@@ -21,10 +23,25 @@
     "error": {
       "cannot_connect": "Failed to connect to PhotoFrame. Please check the IP address/hostname and ensure the device is powered on.\n\n💡 If battery-powered: Press the BOOT button to wake up the device.",
       "duplicate_device_name": "A PhotoFrame with this device name is already configured. Please change the device name on the PhotoFrame (via web interface or config) and try again.",
-      "unknown": "Unexpected error occurred"
+      "unknown": "Unexpected error occurred",
+      "invalid_auth": "The PhotoFrame rejected the password. Check the password set on the device's web interface and try again."
     },
     "abort": {
       "already_configured": "This PhotoFrame device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "PhotoFrame options",
+        "description": "Set the password if you have enabled password protection on the PhotoFrame's own web interface. Leave blank if it is not protected.",
+        "data": {
+          "password": "Frame password"
+        },
+        "data_description": {
+          "password": "Leave blank if the PhotoFrame does not require a password"
+        }
+      }
     }
   }
 }
