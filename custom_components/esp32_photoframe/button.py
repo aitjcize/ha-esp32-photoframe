@@ -9,11 +9,13 @@ import aiohttp
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import PhotoFrameCoordinator
+from .timezones import async_resolve_timezone, remember_timezone_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,9 +33,49 @@ async def async_setup_entry(
         PhotoFrameRefreshButton(coordinator, entry),
         PhotoFrameOTAUpdateButton(coordinator, entry),
         PhotoFrameSleepButton(coordinator, entry),
+        PhotoFrameUseHaTimezoneButton(coordinator, entry),
     ]
 
     async_add_entities(entities)
+
+
+class PhotoFrameUseHaTimezoneButton(CoordinatorEntity, ButtonEntity):
+    """Set the frame's time zone to Home Assistant's own (esp32-photoframe #128).
+
+    Goes through the same pending-config path as the Time zone text entity,
+    so it works while the device sleeps and the change lands on its next
+    check-in.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:home-clock"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the button."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_use_ha_timezone"
+        self._attr_name = "Use Home Assistant time zone"
+        self._attr_device_info = coordinator.device_info
+
+    @property
+    def available(self) -> bool:
+        """Editable whenever the config entities are (see PendingConfigEntityMixin)."""
+        return self.coordinator.has_config_data
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        zone = self.hass.config.time_zone
+        try:
+            name, rule = await async_resolve_timezone(self.hass, zone)
+        except ValueError as err:
+            raise HomeAssistantError(
+                f"Cannot use Home Assistant's time zone '{zone}'; set the Time zone entity "
+                f"by hand instead ({err})"
+            ) from err
+        # Name before rule, for the reason given in PhotoFrameTimezoneText.
+        remember_timezone_name(self.hass, self._entry, name)
+        await self.coordinator.async_set_config({"timezone": rule})
 
 
 class PhotoFrameRotateButton(CoordinatorEntity, ButtonEntity):

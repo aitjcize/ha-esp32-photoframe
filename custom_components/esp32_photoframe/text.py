@@ -15,6 +15,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import PendingConfigEntityMixin, PhotoFrameCoordinator
 from .dynamic_entities import async_setup_firmware_gated_entities
+from .timezones import (
+    OPTION_TIMEZONE_NAME,
+    PRINTABLE_ASCII_RE,
+    TIMEZONE_MAX_LEN,
+    async_resolve_timezone,
+    get_timezone_rules,
+    remember_timezone_name,
+)
 
 # Firmware limits for the rotation schedule (main/config.h)
 MAX_CRON_RULES = 7
@@ -37,6 +45,7 @@ async def async_setup_entry(
         [
             PhotoFrameImageUrlText(coordinator, entry),
             PhotoFrameHaUrlText(coordinator, entry),
+            PhotoFrameTimezoneText(coordinator, entry),
             # Advanced network settings: NTP is supported by all firmware
             # versions, so it is not gated.
             PhotoFrameNtpServerText(coordinator, entry),
@@ -197,6 +206,78 @@ class PhotoFrameHaUrlText(PendingConfigEntityMixin, CoordinatorEntity, TextEntit
     async def async_set_value(self, value: str) -> None:
         """Set the HA URL."""
         await self.coordinator.async_set_config({"ha_url": value})
+
+
+class PhotoFrameTimezoneText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):
+    """Time zone text entity for PhotoFrame (esp32-photoframe #128).
+
+    The device stores a POSIX TZ rule and applies it with tzset(), so a rule
+    with DST transitions ("EST5EDT,M3.2.0,M11.1.0") keeps an hours-based
+    rotation schedule on local time all year. The entity accepts an IANA zone
+    name, resolved through the tz database Home Assistant itself runs on
+    (see timezones.TimezoneRules), or a raw POSIX rule, and shows a zone
+    name back whenever the stored rule is one of a table zone. Many zones
+    share a rule, so the name shown is the one last set here, else Home
+    Assistant's own zone, else the table's first match; the ``posix_rule``
+    attribute always carries what the device actually has.
+    """
+
+    _attr_has_entity_name = True
+    _attr_available = True  # Always editable, even when device is offline
+    _attr_native_max = TIMEZONE_MAX_LEN - 1
+    _attr_pattern = PRINTABLE_ASCII_RE.pattern
+    _config_key = "timezone"
+    _default_icon = "mdi:map-clock"
+
+    def __init__(self, coordinator: PhotoFrameCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the text entity."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_timezone"
+        self._attr_name = "Time zone"
+        self._attr_device_info = coordinator.device_info
+
+    def _rule(self) -> str | None:
+        """The stored POSIX rule, or None when there is no usable value."""
+        config = self.coordinator.data.get("config", {})
+        rule = config.get("timezone")
+        if not isinstance(rule, str) or not rule:
+            return None
+        # TextEntity refuses to publish a state that fails its own pattern or
+        # length, so never hand it one; the device can only have got such a
+        # value from a raw PATCH, and it isn't a working time zone anyway.
+        if len(rule) >= TIMEZONE_MAX_LEN or not PRINTABLE_ASCII_RE.match(rule):
+            return None
+        return rule
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the IANA name for the stored rule, or the rule itself."""
+        rule = self._rule()
+        if rule is None:
+            return None
+        preferred = [self._entry.options.get(OPTION_TIMEZONE_NAME), self.hass.config.time_zone]
+        return get_timezone_rules(self.hass).name_for_rule(rule, preferred) or rule
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the raw POSIX rule alongside the (possibly named) state."""
+        attrs = dict(super().extra_state_attributes or {})
+        attrs["posix_rule"] = self._rule()
+        return attrs
+
+    async def async_set_value(self, value: str) -> None:
+        """Set the time zone from an IANA name or a POSIX TZ rule."""
+        try:
+            name, rule = await async_resolve_timezone(self.hass, value)
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        # The name first: async_set_config notifies the entities at once, and
+        # native_value prefers the remembered name when zones share the rule.
+        # Should the frame then reject the rule, the name is ignored, since
+        # it is only used while its rule is the one stored.
+        remember_timezone_name(self.hass, self._entry, name)
+        await self.coordinator.async_set_config({"timezone": rule})
 
 
 class PhotoFrameNtpServerText(PendingConfigEntityMixin, CoordinatorEntity, TextEntity):

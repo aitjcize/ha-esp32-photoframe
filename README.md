@@ -46,6 +46,7 @@ All settings are available as device controls - no need to dig into configuratio
 - **Auto Rotate Enabled Sensor** select - Only rotate while a chosen binary sensor is on
 - **Deep Sleep** switch - Enable/disable deep sleep for battery saving
 - **Rotation Schedule** text - Set when images rotate, using cron rules
+- **Time Zone** text - The zone the schedule runs in, as an IANA name or POSIX TZ rule (follows DST)
 
 ## Usage
 
@@ -57,9 +58,6 @@ The integration creates the following entities for easy control:
 - `switch.esp32_photoframe_deep_sleep` - Enable/disable deep sleep mode
 - `switch.esp32_photoframe_use_ha_images` - Enable/disable Home Assistant image serving
 
-#### Numbers
-- `number.esp32_photoframe_timezone_offset` - Set the timezone UTC offset
-
 #### Selects
 - `select.esp32_photoframe_rotation_mode` - Choose between "storage" or "url" rotation
 - `select.esp32_photoframe_media_source` - Select which camera/image entity to serve
@@ -69,9 +67,11 @@ The integration creates the following entities for easy control:
 - `text.esp32_photoframe_rotation_schedule` - Set the rotation schedule as cron rules (`minute hour day-of-week`; separate multiple rules with `;`, e.g. `0 9 1-5; 0 18 0,6`)
 - `text.esp32_photoframe_image_url` - Set the image URL for URL rotation mode
 - `text.esp32_photoframe_home_assistant_url` - Configure Home Assistant URL
+- `text.esp32_photoframe_time_zone` - Set the time zone the rotation schedule runs in, as an IANA name (`Europe/Berlin`) or a POSIX TZ rule (`EST5EDT,M3.2.0,M11.1.0`); the `posix_rule` attribute shows what the device stores
 
 #### Buttons
 - `button.esp32_photoframe_rotate_image` - Manually trigger image rotation (like pressing KEY button)
+- `button.esp32_photoframe_use_home_assistant_time_zone` - Set the frame's time zone to Home Assistant's own
 
 #### Sensors
 - `sensor.esp32_photoframe_battery_level` - Battery percentage (shows last known value)

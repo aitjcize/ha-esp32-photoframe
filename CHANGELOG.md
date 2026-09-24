@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Time zone follows DST.** The **Timezone offset** number entity is
+  replaced by a **Time zone** text entity
+  (`text.esp32_photoframe_time_zone`) that takes either an IANA zone name
+  (`Europe/Berlin`, `America/New_York`) or a full POSIX TZ rule
+  (`EST5EDT,M3.2.0,M11.1.0`). The firmware applies the rule with `tzset()`,
+  so an hours-based rotation schedule now stays on local time across the
+  DST changeover instead of drifting by an hour twice a year
+  (esp32-photoframe #128). A name is resolved through the tz database Home
+  Assistant itself runs on, so it tracks tzdata updates and `UTC` or links
+  such as `US/Pacific` work too; a built-in table of 461 zones supplies the
+  names shown back whenever the frame's rule matches one, and the fallback
+  rules. A fixed offset such as `UTC-8` or a custom rule is shown as-is,
+  and the raw rule is always in the entity's `posix_rule` attribute. The
+  frame can only hold one recurring rule, so a name is accepted only when
+  the tz database's rule for it gives the right clock at every point from
+  now on — a zone whose changes follow the Islamic calendar (`Asia/Gaza`,
+  `Asia/Hebron`) or one with an enacted change not yet in force is refused,
+  naming the rule and the date it goes wrong, rather than applied silently
+  an hour off. A **Use Home Assistant time zone** button sets the frame to
+  Home Assistant's own zone in one press. The old number entity read any DST rule as `0` and
+  overwrote it with a fixed offset when set; its registry entry is removed
+  on upgrade.
+
 ## v2.10.0
 
 ### Added

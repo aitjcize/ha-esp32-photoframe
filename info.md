@@ -21,6 +21,7 @@ This integration provides Home Assistant control and monitoring for e-ink photof
 - **Rotation mode** - Choose between SD card or URL rotation
 - **Media source** - Select which camera/image entity to display
 - **Rotation schedule** - Set when images rotate, using cron rules
+- **Time zone** - IANA zone name or POSIX TZ rule the schedule runs in (follows DST)
 - **Image URL** - Configure custom image URL
 
 ## Services
