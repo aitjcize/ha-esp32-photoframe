@@ -525,9 +525,11 @@ _IANA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_+\-]*(?:/[A-Za-z0-9_+\-]+)*$")
 # TZif header (RFC 8536 section 3.1): magic, version, 15 reserved bytes, then
 # isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt.
 _TZIF_HEADER = struct.Struct(">4sc15x6l")
-# How far ahead a footer rule is compared with the zone it stands for: at
-# least this long, and to the last explicit transition when that is later.
-_CHECK_HORIZON = 366 * 86400
+# How far ahead a footer rule is compared with the zone it stands for. Two
+# years is enough to catch an enacted change that is not in force yet; a
+# divergence further out (Palestine's Ramadan-based changes are spelled out
+# for decades) is accepted, and the rule replaced when it comes due.
+_CHECK_HORIZON = 2 * 366 * 86400
 _CHECK_STEP = 30 * 86400
 
 
@@ -613,16 +615,16 @@ def _first_divergence(data: bytes, rule: str, transitions: list[int], now: float
     files pre-expanded to 2037 ("fat" zic output), whose listed transitions
     are the rule's own, and a coming transition that only renames the offset
     (British Columbia going from PDT to year-round MST in 2026). Checked at
-    now, a second either side of every coming explicit transition, and
-    monthly until the last of them or a year out, whichever is later.
+    now, a second either side of every explicit transition within
+    _CHECK_HORIZON, and monthly until then.
     """
     zone = zoneinfo.ZoneInfo.from_file(io.BytesIO(data))
     only_rule = zoneinfo.ZoneInfo.from_file(io.BytesIO(_rule_only_tzif(rule)))
     start = int(now)
-    end = max([start + _CHECK_HORIZON, *transitions])
+    end = start + _CHECK_HORIZON
     instants = set(range(start, end, _CHECK_STEP))
     for transition in transitions:
-        if transition >= start:
+        if start <= transition < end:
             instants.update((transition - 1, transition))
     for instant in sorted(instants):
         at = datetime.fromtimestamp(instant, timezone.utc)

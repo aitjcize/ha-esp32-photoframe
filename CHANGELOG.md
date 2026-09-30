@@ -18,11 +18,12 @@
   rules. A fixed offset such as `UTC-8` or a custom rule is shown as-is,
   and the raw rule is always in the entity's `posix_rule` attribute. The
   frame can only hold one recurring rule, so a name is accepted only when
-  the tz database's rule for it gives the right clock at every point from
-  now on — a zone whose changes follow the Islamic calendar (`Asia/Gaza`,
-  `Asia/Hebron`) or one with an enacted change not yet in force is refused,
-  naming the rule and the date it goes wrong, rather than applied silently
-  an hour off. A **Use Home Assistant time zone** button sets the frame to
+  the tz database's rule for it gives the right clock at every point in the
+  next two years — a zone with an enacted change not yet in force is
+  refused, naming the rule and the date it goes wrong, rather than applied
+  silently an hour off. A divergence further out (`Asia/Gaza` and
+  `Asia/Hebron` follow the Islamic calendar and first differ in 2036) is
+  accepted; the rule will need re-entering when it comes due. A **Use Home Assistant time zone** button sets the frame to
   Home Assistant's own zone in one press. The old number entity read any DST rule as `0` and
   overwrote it with a fixed offset when set; its registry entry is removed
   on upgrade.
