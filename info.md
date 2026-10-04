@@ -52,11 +52,13 @@ target:
 4. Search for "ESP32 PhotoFrame"
 5. Enter your PhotoFrame hostname (default: `photoframe.local`)
 6. If battery-powered and device appears offline, press the BOOT button to wake it up
+7. If the frame's own web interface is password-protected, enter the **Frame password** (optional; blank, the default, means none)
 
 ## Configuration
 
 After adding the device, you can configure:
 
+- **Frame password**: Set, change or clear it from the integration's **Configure** button (applies without a reload)
 - **Use HA Images**: Enable to serve images from Home Assistant
 - **Media Source**: Select which camera/image entity to serve
 - All other settings are available as device controls

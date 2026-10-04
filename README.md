@@ -32,8 +32,11 @@ This custom integration provides comprehensive control and monitoring for e-ink 
 3. Search for "ESP32 PhotoFrame"
 4. Enter your PhotoFrame hostname (default: `photoframe.local`)
    - 💡 **Tip**: If battery-powered and device appears offline, press the BOOT button to wake it up
+5. If you enabled password protection on the frame's own web interface, enter it as the **Frame password** (optional; blank, the default, means none; needs firmware newer than v2.18.0)
 
 The integration will automatically detect your Home Assistant URL and configure the photoframe.
+
+To set, change or clear the frame password later, open the integration under **Settings** → **Devices & Services** and click **Configure**. The change applies straight away, without a reload.
 
 ### Device Controls
 

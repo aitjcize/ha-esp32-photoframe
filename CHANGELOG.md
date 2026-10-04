@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added
+
+- **Frame password.** A frame with password protection enabled on its
+  HTTP API (firmware newer than v2.18.0) can now be used from Home
+  Assistant. Enter the password at setup (**Frame password**; blank, the
+  default, means none) or later from the integration's **Configure**
+  button, which applies it to the running integration without a reload. A
+  wrong password at setup is reported as *invalid_auth* rather than as a
+  connection failure. Known gap: a password enabled or changed on the frame
+  after setup shows the frame as *unavailable* until the new password is
+  entered under **Configure** — there is no re-authentication prompt yet.
+
 ### Changed
 
 - **Time zone follows DST.** The **Timezone offset** number entity is
@@ -13,7 +25,7 @@
   DST changeover instead of drifting by an hour twice a year
   (esp32-photoframe #128). A name is resolved through the tz database Home
   Assistant itself runs on, so it tracks tzdata updates and `UTC` or links
-  such as `US/Pacific` work too; a built-in table of 461 zones supplies the
+  such as `US/Pacific` work too; a built-in table of 466 zones supplies the
   names shown back whenever the frame's rule matches one, and the fallback
   rules. A fixed offset such as `UTC-8` or a custom rule is shown as-is,
   and the raw rule is always in the entity's `posix_rule` attribute. The
@@ -23,10 +35,21 @@
   refused, naming the rule and the date it goes wrong, rather than applied
   silently an hour off. A divergence further out (`Asia/Gaza` and
   `Asia/Hebron` follow the Islamic calendar and first differ in 2036) is
-  accepted; the rule will need re-entering when it comes due. A **Use Home Assistant time zone** button sets the frame to
-  Home Assistant's own zone in one press. The old number entity read any DST rule as `0` and
-  overwrote it with a fixed offset when set; its registry entry is removed
-  on upgrade.
+  accepted; the rule will need re-entering when it comes due. A **Use Home
+  Assistant time zone** button sets the frame to Home Assistant's own zone
+  in one press. The old number entity read any DST rule as `0` and
+  overwrote it with a fixed offset when set.
+  - **Breaking:** dashboards and automations referencing
+    `number.esp32_photoframe_timezone_offset` must be updated to the new
+    `text.esp32_photoframe_time_zone` entity; the old registry entry is
+    removed automatically on upgrade. A frame left on a fixed offset such
+    as `UTC-8` keeps it, and the text entity shows it as-is.
+
+### Fixed
+
+- The manifest no longer lists `aiohttp` as a requirement. Home Assistant
+  ships it, and hassfest rejects integrations that pin it themselves, so
+  validation had been failing since 2026-10-01.
 
 ## v2.10.0
 
