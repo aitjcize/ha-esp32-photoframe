@@ -4,6 +4,7 @@ The frame only ever stores the POSIX rule; the name is for people."""
 
 import importlib.resources
 import io
+import logging
 import os
 import re
 import struct
@@ -15,6 +16,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 TIMEZONES: dict[str, str] = {
     "Africa/Abidjan": "GMT0",
@@ -771,9 +774,21 @@ def load_timezone_rules(now: float | None = None) -> TimezoneRules:
 
 
 async def async_setup_timezone_rules(hass: HomeAssistant) -> None:
-    """Load the rules once per Home Assistant session; a tzdata update comes with a restart."""
-    if DATA_TIMEZONE_RULES not in hass.data:
-        hass.data[DATA_TIMEZONE_RULES] = await hass.async_add_executor_job(load_timezone_rules)
+    """Load the rules once per Home Assistant session; a tzdata update comes with a restart.
+
+    A failure to read the tz database is logged and leaves the built-in table
+    in place (see get_timezone_rules) rather than keeping a frame from loading.
+    """
+    if DATA_TIMEZONE_RULES in hass.data:
+        return
+    try:
+        rules = await hass.async_add_executor_job(load_timezone_rules)
+    except Exception:
+        _LOGGER.warning(
+            "Could not read the tz database; using the built-in time-zone table", exc_info=True
+        )
+        return
+    hass.data[DATA_TIMEZONE_RULES] = rules
 
 
 def get_timezone_rules(hass: HomeAssistant) -> TimezoneRules:
