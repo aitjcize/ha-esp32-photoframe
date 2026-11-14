@@ -14,6 +14,12 @@
   after setup shows the frame as *unavailable* until the new password is
   entered under **Configure** — there is no re-authentication prompt yet.
 
+### Fixed
+
+- Restore the last reported battery percentage when Home Assistant restarts
+  while the photo frame is asleep, instead of showing an unknown value until
+  the frame's next refresh.
+
 ### Changed
 
 - **Time zone follows DST.** The **Timezone offset** number entity is

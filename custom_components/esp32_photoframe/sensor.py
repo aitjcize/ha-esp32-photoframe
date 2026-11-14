@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorStateClass,
@@ -46,7 +47,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class PhotoFrameBatterySensor(CoordinatorEntity, SensorEntity):
+class PhotoFrameBatterySensor(CoordinatorEntity, RestoreSensor):
     """Battery level sensor for PhotoFrame."""
 
     _attr_device_class = SensorDeviceClass.BATTERY
@@ -66,11 +67,26 @@ class PhotoFrameBatterySensor(CoordinatorEntity, SensorEntity):
         """Battery sensor always available to show last known value."""
         return True
 
-    @property
-    def native_value(self) -> int | None:
-        """Return the state of the sensor."""
+    def _update_native_value(self) -> None:
+        """Use a fresh battery reading without clearing the last known value."""
         battery_data = self.coordinator.data.get("battery", {})
-        return battery_data.get("battery_level")
+        if (battery_level := battery_data.get("battery_level")) is not None:
+            self._attr_native_value = battery_level
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the battery level when the frame is asleep during startup."""
+        await super().async_added_to_hass()
+
+        if (last_sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._attr_native_value = last_sensor_data.native_value
+
+        # A reading fetched during setup is newer than the restored value.
+        self._update_native_value()
+
+    def _handle_coordinator_update(self) -> None:
+        """Handle an updated battery reading from the frame."""
+        self._update_native_value()
+        super()._handle_coordinator_update()
 
 
 class PhotoFrameBatteryVoltageSensor(CoordinatorEntity, SensorEntity):
