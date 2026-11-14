@@ -4,6 +4,15 @@
 
 ### Added
 
+- **Firmware update entity.** The frame's firmware now shows up as a
+  standard Home Assistant `update` entity (**Firmware**): installed and
+  latest version, the release notes from GitHub in the update dialog, an
+  **Install** button that runs the frame's OTA update, and install
+  progress while it runs. It works with the Settings > Updates page and
+  update notifications like any other device. The versions are cached in
+  the config entry, so the entity is usable right after a Home Assistant
+  restart while the frame is still asleep.
+
 - **Current image survives a restart.** The last picture the frame
   displayed is saved under Home Assistant's storage directory and shown
   again after a restart, instead of a blank image until the frame's next
@@ -12,6 +21,10 @@
 
 ### Changed
 
+- The **Update firmware** button is replaced by the update entity above
+  and removed. The **Current version**, **Latest version** and **OTA
+  state** sensors are deprecated: existing installs keep them, new installs
+  get them disabled by default, and a later release removes them.
 - The **Current image** entity only updates when the picture actually
   changed. A frame that re-serves the same image on check-in no longer
   bumps the image timestamp, so dashboards and the media browser stop

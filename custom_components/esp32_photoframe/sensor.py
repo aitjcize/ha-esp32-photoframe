@@ -198,6 +198,8 @@ class PhotoFrameBatteryConnectedSensor(CoordinatorEntity, BinarySensorEntity):
 class PhotoFrameCurrentVersionSensor(CoordinatorEntity, SensorEntity):
     """Current firmware version sensor for PhotoFrame."""
 
+    # Superseded by the Firmware update entity; kept for existing installs.
+    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:chip"
 
@@ -223,6 +225,8 @@ class PhotoFrameCurrentVersionSensor(CoordinatorEntity, SensorEntity):
 class PhotoFrameLatestVersionSensor(CoordinatorEntity, SensorEntity):
     """Latest firmware version sensor for PhotoFrame."""
 
+    # Superseded by the Firmware update entity; kept for existing installs.
+    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:update"
 
@@ -248,6 +252,8 @@ class PhotoFrameLatestVersionSensor(CoordinatorEntity, SensorEntity):
 class PhotoFrameOTAStateSensor(CoordinatorEntity, SensorEntity):
     """OTA state sensor for PhotoFrame."""
 
+    # Superseded by the Firmware update entity; kept for existing installs.
+    _attr_entity_registry_enabled_default = False
     _attr_has_entity_name = True
     _attr_icon = "mdi:progress-download"
 
