@@ -48,9 +48,7 @@ class PhotoFrameImage(CoordinatorEntity, ImageEntity):
         # (fetch_successful means new image was retrieved from device)
         if self.coordinator._cached_image and self.coordinator._image_fetch_successful:
             # Image was successfully fetched - update timestamp
-            self._attr_image_last_updated = (
-                self.coordinator._image_last_updated or datetime.now()
-            )
+            self._attr_image_last_updated = self.coordinator._image_last_updated or datetime.now()
             # Clear cached image URL to force HA to refetch
             self._cached_image_content = None
             # Reset the flag so we don't update again until next successful fetch

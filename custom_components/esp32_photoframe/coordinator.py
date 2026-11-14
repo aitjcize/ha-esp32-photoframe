@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -15,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.storage import Store
+from homeassistant.helpers.storage import STORAGE_DIR
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -31,7 +32,17 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-_IMAGE_STORAGE_VERSION = 1
+
+def cached_image_path(hass: HomeAssistant, entry_id: str) -> str:
+    """Where the last displayed image is kept between HA sessions.
+
+    The frame only serves its current image while awake, so without a copy
+    an HA restart shows no picture until the next rotation. It is raw bytes
+    in a file rather than base64 in a Store: an image is a few hundred KB
+    and changes on every rotation, and a JSON blob that size rewritten
+    hourly is unkind to the SD cards most installs run on.
+    """
+    return hass.config.path(STORAGE_DIR, f"{DOMAIN}.image.{entry_id}")
 
 
 class _AuthedSession:
@@ -138,11 +149,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Store cached image uploaded by device (for deep sleep support)
         self._cached_image: bytes | None = None
         self._image_last_updated: datetime | None = None
-        self._image_store = Store(
-            hass,
-            _IMAGE_STORAGE_VERSION,
-            f"{DOMAIN}.image.{entry.entry_id}",
-        )
+        self._image_cache_path = cached_image_path(hass, entry.entry_id)
 
         # Track if last image fetch was successful (to prevent timestamp updates on failures)
         self._image_fetch_successful: bool = False
@@ -215,23 +222,41 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         self.session = _authed_session(async_get_clientsession(self.hass), password)
 
     async def async_restore_cached_image(self) -> None:
-        """Restore the last displayed image from Home Assistant storage."""
-        stored = await self._image_store.async_load()
-        if not stored:
-            return
+        """Load the image a previous HA session saved, if there is one."""
+        path = self._image_cache_path
+
+        def _read() -> tuple[bytes, float] | None:
+            try:
+                mtime = os.stat(path).st_mtime
+                with open(path, "rb") as fp:
+                    return fp.read(), mtime
+            except FileNotFoundError:
+                return None
 
         try:
-            self._cached_image = base64.b64decode(stored["image"], validate=True)
-            self._image_last_updated = datetime.fromisoformat(stored["last_updated"])
-        except (KeyError, TypeError, ValueError):
-            _LOGGER.warning("Ignoring invalid cached image data for %s", self.host)
-            self._cached_image = None
-            self._image_last_updated = None
+            result = await self.hass.async_add_executor_job(_read)
+        except OSError as err:
+            _LOGGER.warning("Could not read the saved image for %s: %s", self.host, err)
+            return
+        if not result or not result[0]:
             return
 
-        _LOGGER.debug(
-            "Restored cached current image (%d bytes)", len(self._cached_image)
-        )
+        self._cached_image, mtime = result
+        # The file is written the moment a changed image is seen, so its
+        # mtime is when the picture last changed.
+        self._image_last_updated = datetime.fromtimestamp(mtime)
+        _LOGGER.debug("Restored cached current image (%d bytes)", len(self._cached_image))
+
+    def _write_cached_image(self, image: bytes) -> None:
+        """Save the image for the next HA session (runs in the executor).
+
+        Written to a temporary name and renamed into place, so a restart
+        mid-write never leaves a truncated picture to restore.
+        """
+        tmp = f"{self._image_cache_path}.tmp"
+        with open(tmp, "wb") as fp:
+            fp.write(image)
+        os.replace(tmp, self._image_cache_path)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
@@ -583,12 +608,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
                         self._cached_image = image
                         self._image_last_updated = datetime.now()
                         self._image_fetch_successful = True
-                        await self._image_store.async_save(
-                            {
-                                "image": base64.b64encode(image).decode("ascii"),
-                                "last_updated": self._image_last_updated.isoformat(),
-                            }
-                        )
+                        try:
+                            await self.hass.async_add_executor_job(self._write_cached_image, image)
+                        except OSError as err:
+                            _LOGGER.warning(
+                                "Could not save the current image for %s: %s", self.host, err
+                            )
                         _LOGGER.debug(
                             "Fetched changed current image (%d bytes)",
                             len(image),

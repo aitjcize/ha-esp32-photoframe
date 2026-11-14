@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Current image survives a restart.** The last picture the frame
+  displayed is saved under Home Assistant's storage directory and shown
+  again after a restart, instead of a blank image until the frame's next
+  rotation. The file is removed when the frame is removed from Home
+  Assistant.
+
+### Changed
+
+- The **Current image** entity only updates when the picture actually
+  changed. A frame that re-serves the same image on check-in no longer
+  bumps the image timestamp, so dashboards and the media browser stop
+  refetching an unchanged picture.
+
+### Fixed
+
+- Restore the last reported battery percentage when Home Assistant restarts
+  while the photo frame is asleep, instead of showing an unknown value until
+  the frame's next refresh.
+
 ## v2.11.0
 
 ### Added
@@ -13,12 +36,6 @@
   connection failure. Known gap: a password enabled or changed on the frame
   after setup shows the frame as *unavailable* until the new password is
   entered under **Configure** — there is no re-authentication prompt yet.
-
-### Fixed
-
-- Restore the last reported battery percentage when Home Assistant restarts
-  while the photo frame is asleep, instead of showing an unknown value until
-  the frame's next refresh.
 
 ### Changed
 

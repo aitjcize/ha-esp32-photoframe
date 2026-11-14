@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
-from .coordinator import PhotoFrameCoordinator
+from .coordinator import PhotoFrameCoordinator, cached_image_path
 from .timezones import async_setup_timezone_rules
 from .view import async_setup_image_view
 
@@ -85,6 +86,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 pass
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Delete the saved image when the frame is removed from Home Assistant."""
+    path = cached_image_path(hass, entry.entry_id)
+    try:
+        await hass.async_add_executor_job(os.remove, path)
+    except FileNotFoundError:
+        pass
+    except OSError as err:
+        _LOGGER.warning("Could not delete %s: %s", path, err)
 
 
 async def async_setup_services(hass: HomeAssistant, coordinator: PhotoFrameCoordinator) -> None:
