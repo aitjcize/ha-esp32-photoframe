@@ -47,51 +47,68 @@ def cached_image_path(hass: HomeAssistant, entry_id: str) -> str:
 
 
 class _AuthedSession:
-    """Wraps HA's shared aiohttp session, attaching Basic auth to every call.
+    """Wraps HA's shared aiohttp session, attaching Basic auth to frame calls.
 
     The frame ignores the username; the password is the whole credential.
     Wrapping the session rather than passing ``auth=`` at each call site means
     a request added later cannot silently go out unauthenticated -- there are
-    already fifteen across the coordinator, buttons and services. The shared
-    session itself is never mutated: it belongs to Home Assistant and is used
-    by every other integration.
+    already fifteen across the coordinator, buttons and services. The header
+    is only attached to requests under the frame's own base URL: anything
+    else (GitHub release notes, for one) goes out exactly as a plain session
+    would send it, so the frame password cannot reach a third party. The
+    shared session itself is never mutated: it belongs to Home Assistant and
+    is used by every other integration.
     """
 
-    def __init__(self, session, authorization: str):
+    def __init__(self, session, authorization: str, base_url: str):
         self._session = session
         self._authorization = authorization
+        # The trailing slash keeps ``http://frame`` from matching
+        # ``http://frame.example.net``.
+        self._base_url = base_url.rstrip("/") + "/"
 
     def __getattr__(self, name):
         return getattr(self._session, name)
 
-    def _with_auth(self, method, *args, **kwargs):
-        # A header rather than ``auth=``: aiohttp 3.14 deprecates both the
-        # ``auth`` argument and BasicAuth, and drops them in 4.0.
-        headers = dict(kwargs.get("headers") or {})
-        headers.setdefault("Authorization", self._authorization)
-        kwargs["headers"] = headers
-        return method(*args, **kwargs)
+    def is_frame_url(self, url) -> bool:
+        """Whether ``url`` addresses the frame this session authenticates to."""
+        url = str(url)
+        return url == self._base_url[:-1] or url.startswith(self._base_url)
 
-    def get(self, *args, **kwargs):
-        return self._with_auth(self._session.get, *args, **kwargs)
+    def _with_auth(self, method, url, *args, **kwargs):
+        if self.is_frame_url(url):
+            # A header rather than ``auth=``: aiohttp 3.14 deprecates both
+            # the ``auth`` argument and BasicAuth, and drops them in 4.0.
+            headers = dict(kwargs.get("headers") or {})
+            headers.setdefault("Authorization", self._authorization)
+            kwargs["headers"] = headers
+        return method(url, *args, **kwargs)
 
-    def post(self, *args, **kwargs):
-        return self._with_auth(self._session.post, *args, **kwargs)
+    def get(self, url, *args, **kwargs):
+        return self._with_auth(self._session.get, url, *args, **kwargs)
 
-    def put(self, *args, **kwargs):
-        return self._with_auth(self._session.put, *args, **kwargs)
+    def post(self, url, *args, **kwargs):
+        return self._with_auth(self._session.post, url, *args, **kwargs)
 
-    def patch(self, *args, **kwargs):
-        return self._with_auth(self._session.patch, *args, **kwargs)
+    def put(self, url, *args, **kwargs):
+        return self._with_auth(self._session.put, url, *args, **kwargs)
 
-    def delete(self, *args, **kwargs):
-        return self._with_auth(self._session.delete, *args, **kwargs)
+    def patch(self, url, *args, **kwargs):
+        return self._with_auth(self._session.patch, url, *args, **kwargs)
 
-    def head(self, *args, **kwargs):
-        return self._with_auth(self._session.head, *args, **kwargs)
+    def delete(self, url, *args, **kwargs):
+        return self._with_auth(self._session.delete, url, *args, **kwargs)
 
-    def request(self, *args, **kwargs):
-        return self._with_auth(self._session.request, *args, **kwargs)
+    def head(self, url, *args, **kwargs):
+        return self._with_auth(self._session.head, url, *args, **kwargs)
+
+    def request(self, method, url, *args, **kwargs):
+        return self._with_auth(
+            lambda u, *a, **kw: self._session.request(method, u, *a, **kw),
+            url,
+            *args,
+            **kwargs,
+        )
 
 
 def frame_authorization(password: str) -> str:
@@ -105,11 +122,11 @@ def frame_authorization(password: str) -> str:
     return f"Basic {token}"
 
 
-def _authed_session(session, password: str):
+def _authed_session(session, password: str, base_url: str):
     """Return the session unchanged when no password is configured."""
     if not password:
         return session
-    return _AuthedSession(session, frame_authorization(password))
+    return _AuthedSession(session, frame_authorization(password), base_url)
 
 
 def _entry_password(entry: ConfigEntry) -> str:
@@ -128,7 +145,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # re-adding the integration; empty means the frame is open, which is
         # the firmware default.
         self._password = _entry_password(entry)
-        self.session = _authed_session(async_get_clientsession(hass), self._password)
+        self.session = _authed_session(async_get_clientsession(hass), self._password, self.host)
         self.entry = entry
         self.hass = hass
 
@@ -224,7 +241,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         if password == self._password:
             return
         self._password = password
-        self.session = _authed_session(async_get_clientsession(self.hass), password)
+        self.session = _authed_session(async_get_clientsession(self.hass), password, self.host)
 
     async def async_restore_cached_image(self) -> None:
         """Load the image a previous HA session saved, if there is one."""

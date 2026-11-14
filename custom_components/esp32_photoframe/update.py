@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -107,8 +108,11 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         if self._release_notes_version == version:
             return self._release_notes
 
+        # Home Assistant's plain session, not the coordinator's: that one
+        # carries the frame password, which must never leave the LAN.
+        session = async_get_clientsession(self.hass)
         try:
-            async with self.coordinator.session.get(
+            async with session.get(
                 _GITHUB_RELEASE_API.format(tag=quote(version, safe="")),
                 headers=_GITHUB_HEADERS,
                 timeout=aiohttp.ClientTimeout(total=15),

@@ -39,6 +39,10 @@ check:
 	python -m isort --check-only custom_components
 	python -m black --check custom_components
 
+# Run the test suite (needs requirements_test.txt)
+test:
+	python -m pytest tests -q
+
 # Clean up cache files
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

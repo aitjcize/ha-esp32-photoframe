@@ -22,6 +22,10 @@ jobs:
       - name: Run linters
         run: |
           make lint
+      - name: Run tests
+        run: |
+          pip install -r requirements_test.txt
+          make test
       - name: Check formatting
         run: |
           make check

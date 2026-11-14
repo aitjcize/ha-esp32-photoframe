@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Security: the frame password was sent to GitHub.** Since v2.12.0 the
+  Firmware update entity fetched its release notes from the GitHub API through
+  the same session that authenticates to the frame, so a frame with a password
+  had its Basic `Authorization` header included in that request. GitHub does
+  not act on it and answered normally, so nothing was observed to break, but
+  the credential left the LAN on every release-notes view. The header is now
+  attached only to requests under the frame's own URL, and the GitHub request
+  goes through Home Assistant's plain session. Change the frame password if
+  you opened the update dialog on v2.12.0 and want to be safe.
+
 ## v2.12.0
 
 ### Added
