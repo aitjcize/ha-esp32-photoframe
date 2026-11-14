@@ -29,7 +29,6 @@ _LOGGER = logging.getLogger(__name__)
 _ACTIVE_OTA_STATES = {"downloading", "installing"}
 _OTA_POLL_INTERVAL = 5
 _OTA_POLL_ATTEMPTS = 120
-_OTA_CHECK_ATTEMPTS = 40
 _GITHUB_RELEASE_API = "https://api.github.com/repos/aitjcize/esp32-photoframe/releases/tags/{tag}"
 _GITHUB_RELEASE_URL = "https://github.com/aitjcize/esp32-photoframe/releases/tag/{tag}"
 _GITHUB_HEADERS = {"Accept": "application/vnd.github+json"}
@@ -43,20 +42,16 @@ async def async_setup_entry(
     """Set up the update platform."""
     coordinator: PhotoFrameCoordinator = hass.data[DOMAIN][entry.entry_id]
 
+    # The update entity replaces the old "Update firmware" button one for one,
+    # so its registry entry goes. The Current version / Latest version / OTA
+    # state sensors stay for now (deprecated, disabled by default on new
+    # installs): people have them on dashboards and in automations.
     entity_registry = er.async_get(hass)
-    for entity_domain, unique_id_suffix in (
-        ("sensor", "current_version"),
-        ("sensor", "latest_version"),
-        ("sensor", "ota_state"),
-        ("button", "ota_update"),
-    ):
-        entity_id = entity_registry.async_get_entity_id(
-            entity_domain,
-            DOMAIN,
-            f"{entry.entry_id}_{unique_id_suffix}",
-        )
-        if entity_id is not None:
-            entity_registry.async_remove(entity_id)
+    button_entity_id = entity_registry.async_get_entity_id(
+        "button", DOMAIN, f"{entry.entry_id}_ota_update"
+    )
+    if button_entity_id is not None:
+        entity_registry.async_remove(button_entity_id)
 
     async_add_entities([PhotoFrameFirmwareUpdate(coordinator, entry)])
 
@@ -135,13 +130,21 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         return self._release_notes
 
     @property
-    def in_progress(self) -> bool | int:
-        """Return OTA installation progress."""
+    def in_progress(self) -> bool:
+        """Return whether an OTA install is under way."""
         ota_data = self.coordinator.data.get("ota", {})
         if ota_data.get("state") in _ACTIVE_OTA_STATES:
-            progress = int(ota_data.get("progress_percent", 0))
-            return progress if progress > 0 else True
+            return True
         return self._install_task is not None and not self._install_task.done()
+
+    @property
+    def update_percentage(self) -> int | None:
+        """Return the install progress the frame reports, if it is installing."""
+        ota_data = self.coordinator.data.get("ota", {})
+        if ota_data.get("state") not in _ACTIVE_OTA_STATES:
+            return None
+        progress = int(ota_data.get("progress_percent") or 0)
+        return progress if progress > 0 else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -158,8 +161,13 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         if ota_data.get("state") in _ACTIVE_OTA_STATES:
             raise HomeAssistantError("Firmware update is already in progress")
 
-        await self._async_post_ota("check", timeout=40)
-        await self._async_wait_for_update_check()
+        # /api/ota/check is synchronous on the frame (up to 30 s) and answers
+        # with the result, leaving the device in the update_available state
+        # that /api/ota/update requires.
+        check = await self._async_post_ota("check", timeout=40)
+        if not check.get("update_available"):
+            await self.coordinator.async_refresh_ota_status()
+            raise HomeAssistantError("The frame reports no firmware update available")
 
         await self._async_post_ota("update", timeout=10)
 
@@ -176,9 +184,14 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
                 f"{self.coordinator.host}/api/ota/{action}",
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as response:
-                payload = await response.json(content_type=None)
                 if response.status != 200:
                     raise HomeAssistantError(f"OTA {action} failed: HTTP {response.status}")
+                try:
+                    payload = await response.json(content_type=None)
+                except ValueError as err:
+                    raise HomeAssistantError(
+                        f"OTA {action} failed: unexpected reply from the frame"
+                    ) from err
                 if payload.get("status") != "success":
                     raise HomeAssistantError(
                         payload.get("message", f"Device rejected OTA {action}")
@@ -186,29 +199,6 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
         except aiohttp.ClientError as err:
             raise HomeAssistantError(f"OTA {action} failed: {err}") from err
         return payload
-
-    async def _async_wait_for_update_check(self) -> None:
-        """Wait for the device's asynchronous OTA check to finish."""
-        await asyncio.sleep(1)
-        for _ in range(_OTA_CHECK_ATTEMPTS):
-            ota_data = await self.coordinator.async_refresh_ota_status()
-            if not ota_data:
-                await asyncio.sleep(1)
-                continue
-
-            state = ota_data.get("state")
-            if state == "update_available":
-                return
-            if state == "error":
-                raise HomeAssistantError(
-                    ota_data.get("error_message") or "Firmware update check failed"
-                )
-            if state == "idle":
-                raise HomeAssistantError("No firmware update is available")
-
-            await asyncio.sleep(1)
-
-        raise HomeAssistantError("Timed out waiting for firmware update check")
 
     async def _async_track_install(self) -> None:
         """Track OTA progress until the device reports a terminal state."""
@@ -225,6 +215,10 @@ class PhotoFrameFirmwareUpdate(CoordinatorEntity, UpdateEntity):
                         "Firmware update failed: %s",
                         ota_data.get("error_message") or "unknown device error",
                     )
+                    return
+                if state == "success":
+                    # Installed; the frame reboots next and reports the new
+                    # version when it checks in.
                     return
                 current_version = normalize_firmware_version(ota_data.get("current_version"))
                 latest_version = normalize_firmware_version(ota_data.get("latest_version"))

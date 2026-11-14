@@ -135,8 +135,12 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         # Store last known battery data to preserve when device is asleep
         self._last_battery_data = {}
 
-        # Store last known OTA data to preserve when device is asleep
-        self._last_ota_data = {}
+        # Store last known OTA data to preserve when device is asleep. Seeded
+        # with the versions from the config entry so the update entity has
+        # something to show right after an HA restart, before the
+        # (deep-sleeping) device has checked in again. The OTA state itself is
+        # not kept: a restart cannot resume an install.
+        self._last_ota_data: dict[str, Any] = dict(entry.data.get("cached_ota", {}))
 
         # Store last known sensor data to preserve when device is asleep
         self._last_sensor_data = {}
@@ -340,6 +344,7 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
             if ota_data:
                 _LOGGER.debug("OTA data fetched successfully: %s", ota_data.get("current_version"))
                 self._last_ota_data = ota_data
+                self._save_cached_ota()
             # Otherwise, use the last known OTA data
             else:
                 _LOGGER.debug("Using cached OTA data")
@@ -679,6 +684,23 @@ class PhotoFrameCoordinator(DataUpdateCoordinator):
         if self.entry.data.get("cached_config") == self._last_config_data:
             return
         new_data = {**self.entry.data, "cached_config": dict(self._last_config_data)}
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+
+    def _save_cached_ota(self) -> None:
+        """Persist the firmware versions to the config entry.
+
+        Same idea as _save_cached_config: the update entity can then report
+        the installed and latest versions right after an HA restart instead
+        of being unavailable until the frame next wakes. Only the versions are
+        kept; a cached "downloading" state would be a lie after a restart.
+        """
+        cached = {
+            "current_version": self._last_ota_data.get("current_version", ""),
+            "latest_version": self._last_ota_data.get("latest_version", ""),
+        }
+        if self.entry.data.get("cached_ota") == cached:
+            return
+        new_data = {**self.entry.data, "cached_ota": cached}
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
     def is_key_pending(self, key: str) -> bool:
