@@ -25,6 +25,10 @@
   and removed. The **Current version**, **Latest version** and **OTA
   state** sensors are deprecated: existing installs keep them, new installs
   get them disabled by default, and a later release removes them.
+  - **Breaking:** automations and dashboards that press
+    `button.esp32_photoframe_update_firmware` must switch to the
+    `update.install` service on `update.esp32_photoframe_firmware`; the
+    old button's registry entry is removed automatically on upgrade.
 - The **Current image** entity only updates when the picture actually
   changed. A frame that re-serves the same image on check-in no longer
   bumps the image timestamp, so dashboards and the media browser stop
