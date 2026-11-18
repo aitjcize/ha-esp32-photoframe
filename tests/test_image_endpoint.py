@@ -9,7 +9,7 @@ refused while "Use HA images" is off or, by default, from outside the LAN.
 
 import sys
 from types import ModuleType, SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.setup import async_setup_component
@@ -20,6 +20,7 @@ from custom_components.esp32_photoframe.const import (
     CONF_HOST,
     CONF_IMAGE_LOCAL_ONLY,
     CONF_IMAGE_TOKEN,
+    CONF_PREVIOUS_IMAGE_URL,
     DOMAIN,
     IMAGE_ENDPOINT_PATH,
 )
@@ -29,6 +30,7 @@ from custom_components.esp32_photoframe.image_endpoint import (
     ha_image_url,
     is_ha_image_url,
 )
+from custom_components.esp32_photoframe.switch import PhotoFrameUseHAImagesSwitch
 from custom_components.esp32_photoframe.view import PhotoFrameImageView, _is_local_request
 
 HA_URL = "http://192.168.1.10:8123"
@@ -226,3 +228,42 @@ async def test_migration_waits_for_the_frame_config(hass):
     coordinator.async_set_config.assert_awaited_once_with(
         {"image_url": f"{HA_URL}{IMAGE_ENDPOINT_PATH}/tok-living"}
     )
+
+
+async def test_switch_restores_the_frames_own_url(hass):
+    own_url = "https://photos.example.com/next.jpg"
+    entry = _frame(hass, "living", "tok-living", "camera.front", use_ha_images=False)
+    coordinator = FakeCoordinator(own_url)
+    coordinator.data["config"]["ha_url"] = "https://new-ha.example.com"
+    coordinator.device_info = None
+    switch = PhotoFrameUseHAImagesSwitch(coordinator, entry, hass)
+    switch.async_write_ha_state = MagicMock()
+
+    await switch.async_turn_on()
+    assert entry.options["use_ha_images"] is True
+    assert entry.options[CONF_PREVIOUS_IMAGE_URL] == own_url
+    # At the address the frame reaches Home Assistant at now, not the one
+    # saved at setup
+    coordinator.async_set_config.assert_awaited_with(
+        {"image_url": f"https://new-ha.example.com{IMAGE_ENDPOINT_PATH}/tok-living"}
+    )
+
+    # Turning it on again must not record the HA URL as the frame's own
+    await switch.async_turn_on()
+    assert entry.options[CONF_PREVIOUS_IMAGE_URL] == own_url
+
+    await switch.async_turn_off()
+    assert entry.options["use_ha_images"] is False
+    assert CONF_PREVIOUS_IMAGE_URL not in entry.options
+    coordinator.async_set_config.assert_awaited_with({"image_url": own_url})
+
+
+async def test_switch_off_leaves_a_url_the_user_changed(hass):
+    entry = _frame(hass, "living", "tok-living", "camera.front")
+    coordinator = FakeCoordinator("https://photos.example.com/next.jpg")
+    coordinator.device_info = None
+    switch = PhotoFrameUseHAImagesSwitch(coordinator, entry, hass)
+    switch.async_write_ha_state = MagicMock()
+
+    await switch.async_turn_off()
+    coordinator.async_set_config.assert_not_awaited()

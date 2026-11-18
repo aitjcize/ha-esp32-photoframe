@@ -11,14 +11,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import CONF_PREVIOUS_IMAGE_URL, DOMAIN
 from .coordinator import (
     PendingConfigEntityMixin,
     PhotoFrameCoordinator,
     ProcessingSettingEntityMixin,
 )
 from .dynamic_entities import async_setup_firmware_gated_entities
-from .image_endpoint import ha_image_url
+from .image_endpoint import ha_image_url, is_ha_image_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,6 +145,10 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         """Enable HA image serving."""
         new_options = dict(self._entry.options)
         new_options["use_ha_images"] = True
+        # Remember the frame's own image URL so turning this off restores it
+        current = self._frame_config("image_url")
+        if not is_ha_image_url(current):
+            new_options[CONF_PREVIOUS_IMAGE_URL] = current
         self._hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
 
@@ -156,11 +160,17 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         _LOGGER.info("Configured %s to use HA images", self._entry.title)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable HA image serving."""
+        """Disable HA image serving and give the frame its own image URL back."""
         new_options = dict(self._entry.options)
         new_options["use_ha_images"] = False
+        previous = new_options.pop(CONF_PREVIOUS_IMAGE_URL, "")
         self._hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
+
+        # Home Assistant no longer serves this frame, so leaving its URL on the
+        # image view would only fail every fetch
+        if is_ha_image_url(self._frame_config("image_url")):
+            await self.coordinator.async_set_config({"image_url": previous})
         _LOGGER.info("Disabled HA image serving for %s", self._entry.title)
 
 

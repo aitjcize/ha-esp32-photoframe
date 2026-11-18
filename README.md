@@ -117,7 +117,7 @@ By default the endpoint also answers only requests from your local network. If y
 1. Select a camera or image entity with the **Media source** select
 2. Set the photoframe to URL rotation mode
 3. Turn on **Use HA images**: the photoframe's image URL is set to its Home Assistant URL
-4. Images from the selected entity are served to the photoframe
+4. Images from the selected entity are served to the photoframe; turning **Use HA images** off restores the frame's previous image URL
 
 ## How It Works
 

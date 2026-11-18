@@ -18,6 +18,9 @@
 - **Each frame gets its own picture.** The image view served the first
   frame's media source to every frame; with the token it serves each frame
   the source selected on that frame.
+- **Turning off Use HA images gives the frame its image URL back.** Turning
+  it on replaced the frame's image URL for good; turning it off now restores
+  the URL the frame had before.
 
 ### Upgrading
 
