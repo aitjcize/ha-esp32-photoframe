@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Security: the served image was public.** With **Use HA images**, the
+  frame fetches its picture from `/api/esp32_photoframe/image`, which needs
+  no Home Assistant login because the frame cannot log in. Anyone who could
+  reach Home Assistant, including over the internet through a reverse proxy
+  or Home Assistant Cloud, could fetch the configured camera or image (#12).
+  Each frame now fetches `/api/esp32_photoframe/image/<token>`, with a random
+  token kept in its config entry, and the view serves nothing to any other
+  path, to an unknown token, or while that frame's **Use HA images** is off.
+  By default it also answers only requests from the local network; turn off
+  **Serve images to the local network only** in the integration options if
+  your frame reaches Home Assistant through a public address.
+- **Each frame gets its own picture.** The image view served the first
+  frame's media source to every frame; with the token it serves each frame
+  the source selected on that frame.
+
+### Upgrading
+
+Frames that use HA images are sent their new URL automatically. A sleeping
+frame gets it at its next wake, and may miss that one rotation, since it
+fetches the old address before the new one arrives.
+
 ## v2.12.1
 
 ### Fixed

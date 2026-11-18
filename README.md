@@ -102,25 +102,29 @@ data:
 
 ### Image Serving for URL Rotation
 
-When you configure a media entity in the integration options, the photoframe can fetch images from:
+With **Use HA images** on, the photoframe fetches its pictures from Home Assistant at a URL of its own:
 
 ```
-http://YOUR_HA_URL:8123/api/esp32_photoframe/image
+http://YOUR_HA_URL:8123/api/esp32_photoframe/image/<token>
 ```
+
+The frame cannot log in to Home Assistant, so the random token in this URL is what keeps your pictures private. The integration creates it and sends the URL to the frame; there is nothing to configure. The endpoint serves nothing without a valid token, or while that frame's **Use HA images** is off.
+
+By default the endpoint also answers only requests from your local network. If your frame reaches Home Assistant through a public address or Home Assistant Cloud, turn off **Serve images to the local network only** in the integration options.
 
 **Setup for URL Rotation:**
 
-1. Configure a camera or image entity in the integration options
+1. Select a camera or image entity with the **Media source** select
 2. Set the photoframe to URL rotation mode
-3. The photoframe's image URL will be automatically set to the HA endpoint
-4. Images from the selected entity will be served to the photoframe
+3. Turn on **Use HA images**: the photoframe's image URL is set to its Home Assistant URL
+4. Images from the selected entity are served to the photoframe
 
 ## How It Works
 
 ### URL-Based Rotation with Home Assistant
 
 1. **Setup**: During integration setup, the HA URL is sent to the photoframe via its `/api/config` endpoint
-2. **Image Serving**: The integration registers an HTTP endpoint at `/api/esp32_photoframe/image`
+2. **Image Serving**: The integration registers an HTTP endpoint at `/api/esp32_photoframe/image/<token>`, one token per frame
 3. **Photoframe Fetches**: When in URL rotation mode, the photoframe fetches images from this endpoint
 4. **Dynamic Content**: The endpoint serves images from the configured camera/image entity
 5. **Battery Reporting**: When the photoframe wakes up and has the HA URL configured, it posts battery data back to HA

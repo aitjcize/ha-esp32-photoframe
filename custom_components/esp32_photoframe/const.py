@@ -25,5 +25,9 @@ API_PROCESSING_SETTINGS = "/api/settings/processing"
 SERVICE_ROTATE = "rotate"
 SERVICE_DISPLAY_IMAGE = "display_image"
 
-# Image serving
+# Image serving. Each frame fetches IMAGE_ENDPOINT_PATH/<its image token>; the
+# bare path (what older releases configured) serves nothing.
 IMAGE_ENDPOINT_PATH = "/api/esp32_photoframe/image"
+CONF_IMAGE_TOKEN = "image_token"
+# Option: refuse image requests from outside the local network (default on)
+CONF_IMAGE_LOCAL_ONLY = "image_local_only"

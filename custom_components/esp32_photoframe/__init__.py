@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import PhotoFrameCoordinator, cached_image_path
+from .image_endpoint import async_ensure_image_token, async_track_image_url
 from .timezones import async_setup_timezone_rules
 from .view import async_setup_image_view
 
@@ -43,6 +44,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_setup_image_view(hass)
         hass.data[DATA_VIEWS_REGISTERED] = True
 
+    # The secret in this frame's image URL (see image_endpoint.py)
+    async_ensure_image_token(hass, entry)
+
     coordinator = PhotoFrameCoordinator(hass, entry)
 
     await coordinator.async_restore_cached_image()
@@ -58,6 +62,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await async_setup_timezone_rules(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    async_track_image_url(hass, entry, coordinator)
 
     # Register services (only once)
     if len(hass.data[DOMAIN]) == 1:

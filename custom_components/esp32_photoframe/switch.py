@@ -9,16 +9,16 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.network import get_url
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_HA_URL, DOMAIN, IMAGE_ENDPOINT_PATH
+from .const import DOMAIN
 from .coordinator import (
     PendingConfigEntityMixin,
     PhotoFrameCoordinator,
     ProcessingSettingEntityMixin,
 )
 from .dynamic_entities import async_setup_firmware_gated_entities
+from .image_endpoint import ha_image_url
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -138,6 +138,9 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         """Return true if HA image serving is enabled."""
         return self._entry.options.get("use_ha_images", False)
 
+    def _frame_config(self, key: str) -> str:
+        return ((self.coordinator.data or {}).get("config") or {}).get(key) or ""
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable HA image serving."""
         new_options = dict(self._entry.options)
@@ -145,11 +148,12 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         self._hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
 
-        # Push image URL to device (cached if offline)
-        ha_url = self._entry.data.get(CONF_HA_URL) or get_url(self._hass)
-        image_url = f"{ha_url}{IMAGE_ENDPOINT_PATH}"
+        # Push image URL to device (cached if offline), at the address in the
+        # frame's own Home Assistant URL setting: the one saved at setup may
+        # be out of date
+        image_url = ha_image_url(self._hass, self._entry, self._frame_config("ha_url"))
         await self.coordinator.async_set_config({"image_url": image_url})
-        _LOGGER.info("Configured photoframe to use HA images: %s", image_url)
+        _LOGGER.info("Configured %s to use HA images", self._entry.title)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable HA image serving."""
@@ -157,7 +161,7 @@ class PhotoFrameUseHAImagesSwitch(CoordinatorEntity, SwitchEntity):
         new_options["use_ha_images"] = False
         self._hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
-        _LOGGER.info("Disabled HA image serving - photoframe will use configured URL")
+        _LOGGER.info("Disabled HA image serving for %s", self._entry.title)
 
 
 class PhotoFrameSleepScheduleSwitch(PendingConfigEntityMixin, CoordinatorEntity, SwitchEntity):

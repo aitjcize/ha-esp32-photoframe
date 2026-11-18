@@ -15,7 +15,7 @@ from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.network import get_url
 
-from .const import API_SYSTEM_INFO, CONF_HA_URL, DOMAIN
+from .const import API_SYSTEM_INFO, CONF_HA_URL, CONF_IMAGE_LOCAL_ONLY, DOMAIN
 from .coordinator import frame_authorization
 
 _LOGGER = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class PhotoFrameOptionsFlow(config_entries.OptionsFlow):
-    """Lets the frame's HTTP API password be set or changed after setup."""
+    """The frame's HTTP API password and who may fetch its Home Assistant image."""
 
     def __init__(self, entry: config_entries.ConfigEntry) -> None:
         self._entry = entry
@@ -212,6 +212,7 @@ class PhotoFrameOptionsFlow(config_entries.OptionsFlow):
                 data={
                     **self._entry.options,
                     CONF_PASSWORD: user_input.get(CONF_PASSWORD) or "",
+                    CONF_IMAGE_LOCAL_ONLY: user_input.get(CONF_IMAGE_LOCAL_ONLY, True),
                 },
             )
 
@@ -225,7 +226,11 @@ class PhotoFrameOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_PASSWORD, description={"suggested_value": current}
-                    ): PASSWORD_SELECTOR
+                    ): PASSWORD_SELECTOR,
+                    vol.Optional(
+                        CONF_IMAGE_LOCAL_ONLY,
+                        default=self._entry.options.get(CONF_IMAGE_LOCAL_ONLY, True),
+                    ): bool,
                 }
             ),
         )

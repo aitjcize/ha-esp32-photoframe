@@ -36,10 +36,12 @@
         "title": "PhotoFrame options",
         "description": "Set the password if you have enabled password protection on the PhotoFrame's own web interface. Leave blank if it is not protected.",
         "data": {
-          "password": "Frame password"
+          "password": "Frame password",
+          "image_local_only": "Serve images to the local network only"
         },
         "data_description": {
-          "password": "Leave blank if the PhotoFrame does not require a password"
+          "password": "Leave blank if the PhotoFrame does not require a password",
+          "image_local_only": "With Use HA images on, only answer the frame's image requests from the local network. Turn off if the frame reaches Home Assistant through a public address or Home Assistant Cloud."
         }
       }
     }

@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
+from ipaddress import ip_address
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.network import is_cloud_connection
+from homeassistant.util import network as network_util
 
-from .const import DOMAIN, IMAGE_ENDPOINT_PATH
+from .const import CONF_IMAGE_LOCAL_ONLY, CONF_IMAGE_TOKEN, DOMAIN, IMAGE_ENDPOINT_PATH
 from .coordinator import PhotoFrameCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,32 +76,79 @@ def find_coordinator_by_device_id(
     return None
 
 
-class PhotoFrameImageView(HomeAssistantView):
-    """View to serve images to the photoframe."""
+def _is_local_request(hass: HomeAssistant, request: web.Request) -> bool:
+    """Return whether a request came from the local network.
 
-    url = IMAGE_ENDPOINT_PATH
+    The same test as Home Assistant's local-only webhooks: a request relayed by
+    Home Assistant Cloud is remote, otherwise the client address (as resolved
+    through any trusted proxy) must be loopback, private or link-local.
+    """
+    if is_cloud_connection(hass) or request.remote is None:
+        return False
+    try:
+        return network_util.is_local(ip_address(request.remote))
+    except ValueError:
+        return False
+
+
+def find_entry_by_image_token(hass: HomeAssistant, token: str) -> ConfigEntry | None:
+    """Return the frame whose image URL carries this token."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        expected = entry.data.get(CONF_IMAGE_TOKEN)
+        if expected and hmac.compare_digest(expected.encode(), token.encode()):
+            return entry
+    return None
+
+
+class PhotoFrameImageView(HomeAssistantView):
+    """View to serve images to the photoframe.
+
+    Each frame fetches IMAGE_ENDPOINT_PATH/<its image token>. Every refusal is
+    a plain 404, so the response never tells a caller whether a token exists.
+    """
+
+    url = f"{IMAGE_ENDPOINT_PATH}/{{token}}"
+    # The bare path is what older releases sent to the frame; it is
+    # kept only to log a hint while such a frame waits for its new URL
+    extra_urls = [IMAGE_ENDPOINT_PATH]
     name = "api:esp32_photoframe:image"
-    requires_auth = False  # Photoframe doesn't support auth
+    requires_auth = False  # Photoframe doesn't support auth; see image_endpoint.py
 
     def __init__(self, hass: HomeAssistant) -> None:
         """Initialize the view."""
         self.hass = hass
 
-    async def get(self, request: web.Request) -> web.Response:
-        """Serve the configured image."""
-        # Get the configured media entity from integration data
-        # For now, we'll look for a configured entity in the integration options
+    async def get(self, request: web.Request, token: str | None = None) -> web.Response:
+        """Serve the image of the frame this token belongs to."""
+        not_found = web.Response(status=404, text="Not found")
 
-        # Try to find the first photoframe integration
-        photoframe_entries = [entry for entry in self.hass.config_entries.async_entries(DOMAIN)]
+        if not token:
+            _LOGGER.info(
+                "Image request from %s without a frame token; a frame set up by an "
+                "older release gets its new image URL at its next wake",
+                request.remote,
+            )
+            return not_found
 
-        if not photoframe_entries:
-            _LOGGER.error("No PhotoFrame integration configured")
-            return web.Response(status=404, text="No PhotoFrame integration configured")
+        entry = find_entry_by_image_token(self.hass, token)
+        if entry is None:
+            _LOGGER.warning("Image request from %s with an unknown token", request.remote)
+            return not_found
 
-        # Get the first entry's options
-        entry = photoframe_entries[0]
         options = entry.options or {}
+        if not options.get("use_ha_images"):
+            _LOGGER.info("Image request for %s while Use HA images is off", entry.title)
+            return not_found
+
+        if options.get(CONF_IMAGE_LOCAL_ONLY, True) and not _is_local_request(self.hass, request):
+            _LOGGER.warning(
+                "Refused an image request for %s from %s, outside the local network. "
+                "If this frame reaches Home Assistant through a public address, turn "
+                "off 'Serve images to the local network only' in the integration options",
+                entry.title,
+                request.remote,
+            )
+            return not_found
 
         # Get the configured media entity
         media_entity_id = options.get("media_entity_id")
